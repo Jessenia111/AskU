@@ -160,3 +160,4 @@ Response 201:
 403 Forbidden: not enough permissions  
 404 Not Found: entity missing  
 429 Too Many Requests: rate limit triggered
+git add docs/api.md
