@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  STUDENT
+  STAFF
+  MODERATOR
+  ADMIN
+}
+
+enum ContentType {
+  THREAD
+  COMMENT
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+}
+
+enum ModActionType {
+  HIDE
+  DELETE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  utSubject String   @unique
+  email     String?
+  createdAt DateTime @default(now())
+
+  roles       UserRole[]
+  enrollments Enrollment[]
+  pseudonyms  Pseudonym[]
+  modActions  ModerationAction[]
+  auditLogs   AuditLog[]
+}
+
+model Role {
+  id   String   @id @default(uuid())
+  name RoleName @unique
+
+  users UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Course {
+  id        String   @id @default(uuid())
+  code      String
+  title     String
+  semester  String
+  createdAt DateTime @default(now())
+
+  enrollments Enrollment[]
+  pseudonyms  Pseudonym[]
+  threads     Thread[]
+
+  @@unique([code, semester])
+}
+
+model Enrollment {
+  userId         String
+  courseId       String
+  enrollmentRole RoleName? // STUDENT/STAFF (optional)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, courseId])
+}
+
+model Pseudonym {
+  id         String   @id @default(uuid())
+  userId     String
+  courseId   String
+  publicName String
+  createdAt  DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  threads  Thread[]
+  comments Comment[]
+  reports  Report[]
+
+  @@unique([userId, courseId])
+  @@unique([courseId, publicName])
+}
+
+model Thread {
+  id                String   @id @default(uuid())
+  courseId          String
+  authorPseudonymId String
+  title             String
+  body              String
+  status            String   @default("OPEN")
+  isHidden          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  course Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  author Pseudonym @relation(fields: [authorPseudonymId], references: [id])
+
+  comments Comment[]
+}
+
+model Comment {
+  id                String   @id @default(uuid())
+  threadId          String
+  authorPseudonymId String
+  body              String
+  isHidden          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  thread Thread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author Pseudonym @relation(fields: [authorPseudonymId], references: [id])
+}
+
+model Report {
+  id                  String       @id @default(uuid())
+  reporterPseudonymId String
+  targetType          ContentType
+  targetId            String
+  reason              String
+  details             String?
+  status              ReportStatus @default(OPEN)
+  createdAt           DateTime     @default(now())
+
+  reporter Pseudonym @relation(fields: [reporterPseudonymId], references: [id])
+
+  // We keep targetId polymorphic (thread/comment) for MVP simplicity
+  modActions ModerationAction[]
+}
+
+model ModerationAction {
+  id              String        @id @default(uuid())
+  reportId        String?
+  moderatorUserId String
+  actionType      ModActionType
+  targetType      ContentType
+  targetId        String
+  note            String?
+  createdAt       DateTime      @default(now())
+
+  moderator User @relation(fields: [moderatorUserId], references: [id])
+
+  report Report? @relation(fields: [reportId], references: [id])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String
+  eventType    String
+  entityType   String?
+  entityId     String?
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+
+  actor User @relation(fields: [actorUserId], references: [id])
+}
