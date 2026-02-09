@@ -1,0 +1,158 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+
+    html,
+    body,
+    #app {
+        height: 100%;
+    }
+
+    body {
+        @apply bg-slate-100 text-slate-900 antialiased;
+    }
+
+    a {
+        @apply text-blue-700 hover:text-blue-600;
+        text-decoration: none;
+    }
+}
+
+@layer components {
+    .asku-shell {
+        @apply min-h-full;
+    }
+
+    .asku-header {
+        @apply bg-white border-b border-slate-200;
+    }
+
+    .asku-header-inner {
+        @apply max-w-5xl mx-auto px-6 py-4 flex items-center justify-between;
+    }
+
+    .asku-brand {
+        @apply flex items-center gap-4;
+    }
+
+    .asku-avatar {
+        @apply w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold;
+    }
+
+    .asku-brand-title {
+        @apply text-2xl font-semibold leading-none;
+    }
+
+    .asku-brand-subtitle {
+        @apply text-slate-500 text-base mt-1;
+    }
+
+    .asku-menu-btn {
+        @apply w-12 h-12 rounded-xl border border-slate-200 bg-white shadow-sm flex items-center justify-center hover:bg-slate-50;
+    }
+
+    .asku-main {
+        @apply max-w-5xl mx-auto px-6 py-10;
+    }
+
+    .asku-page-title {
+        @apply text-5xl font-semibold tracking-tight mb-8;
+    }
+
+    .asku-subheader {
+        @apply flex items-center gap-4 mb-6;
+    }
+
+    .asku-back {
+        @apply text-slate-600 hover:text-slate-800 flex items-center gap-2;
+    }
+
+    .asku-section-title {
+        @apply text-4xl font-semibold tracking-tight;
+    }
+
+    .asku-link-action {
+        @apply inline-block text-blue-700 hover:text-blue-600 font-medium mt-2 mb-4;
+    }
+
+    .asku-card {
+        @apply bg-white border border-slate-200 rounded-2xl shadow-sm;
+    }
+
+    .asku-card-pad {
+        @apply p-6;
+    }
+
+    .asku-card-topbar {
+        @apply h-2 rounded-t-2xl bg-blue-600;
+    }
+
+    .asku-grid {
+        @apply grid gap-6;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    @media (max-width: 900px) {
+        .asku-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .asku-thread-title {
+        @apply text-2xl font-semibold text-slate-900;
+    }
+
+    .asku-meta {
+        @apply text-slate-500 text-base mt-2;
+    }
+
+    .asku-body {
+        @apply text-slate-700 text-lg mt-4;
+    }
+
+    .asku-date {
+        @apply text-slate-500 text-base;
+    }
+
+    .asku-divider {
+        @apply border-t border-slate-200 my-6;
+    }
+
+    .asku-input {
+        @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200;
+    }
+
+    .asku-textarea {
+        @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200;
+    }
+
+    .asku-btn {
+        @apply inline-flex items-center justify-center rounded-xl bg-blue-700 text-white px-5 py-3 font-medium hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed;
+    }
+
+    .asku-btn-ghost {
+        @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-50;
+    }
+
+    .asku-dropdown {
+        @apply relative inline-block;
+    }
+
+    .asku-dropdown-menu {
+        @apply absolute right-0 mt-2 w-44 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden z-50;
+    }
+
+    .asku-dropdown-item {
+        @apply w-full text-left px-4 py-3 text-slate-700 hover:bg-slate-50;
+    }
+
+    .asku-error {
+        @apply text-red-600 whitespace-pre-wrap;
+    }
+
+    .asku-muted {
+        @apply text-slate-500;
+    }
+}

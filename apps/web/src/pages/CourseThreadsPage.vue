@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import {ref, computed, onMounted} from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
+import { apiFetch } from "../api/client";
+import UiCard from "../components/UiCard.vue";
+import ReportMenu from "../components/ReportMenu.vue";
 
 type ThreadListItem = {
   id: string;
@@ -16,20 +19,25 @@ const route = useRoute();
 const courseId = computed(() => String(route.params.courseId));
 
 const threads = ref<ThreadListItem[]>([]);
-const error = ref<string | null>(null);
 const loading = ref(false);
+const error = ref<string | null>(null);
 
+const showNew = ref(false);
 const title = ref("");
 const body = ref("");
 const submitting = ref(false);
+
+function fmt(s: string) {
+  return new Date(s).toLocaleString();
+}
 
 async function load() {
   loading.value = true;
   error.value = null;
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/v1/courses/${courseId.value}/threads`);
-    if (!res.ok) throw new Error(await res.text());
-    threads.value = await res.json();
+    threads.value = await apiFetch<ThreadListItem[]>(
+      `/api/v1/courses/${courseId.value}/threads`
+    );
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -37,21 +45,17 @@ async function load() {
   }
 }
 
-onMounted(load);
-
 async function createThread() {
   submitting.value = true;
   error.value = null;
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/v1/courses/${courseId.value}/threads`, {
+    await apiFetch(`/api/v1/courses/${courseId.value}/threads`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: title.value, body: body.value }),
     });
-    if (!res.ok) throw new Error(await res.text());
-
     title.value = "";
     body.value = "";
+    showNew.value = false;
     await load();
   } catch (e) {
     error.value = String(e);
@@ -60,56 +64,78 @@ async function createThread() {
   }
 }
 
-function fmt(s: string) {
-  return new Date(s).toLocaleString();
-  
+function onReport(_reason: "spam" | "abuse" | "other") {
+  alert("Report sent (stub). Hook API later.");
 }
+
+onMounted(load);
 </script>
 
 <template>
-  <div style="padding: 16px; max-width: 900px">
-    <div style="display:flex; gap:12px; align-items:center; margin-bottom: 12px">
-      <router-link to="/">← Courses</router-link>
-      <h2 style="margin:0">Threads</h2>
+  <div>
+    <div class="asku-subheader">
+      <router-link class="asku-back" to="/">← Courses</router-link>
+      <div class="asku-section-title">Threads</div>
     </div>
 
-    <div style="border:1px solid #ddd; padding:12px; border-radius:8px; margin-bottom:16px">
-      <h3 style="margin-top:0">Create a thread</h3>
+    <button class="asku-link-action" @click="showNew = !showNew">
+      Post New Thread
+    </button>
 
-      <div style="display:flex; flex-direction:column; gap:8px">
-        <input v-model="title" placeholder="Title" style="padding:8px" />
-        <textarea v-model="body" placeholder="Body" rows="4" style="padding:8px"></textarea>
+    <UiCard v-if="showNew" :topbar="false">
+      <div class="asku-card-pad">
+        <div class="text-2xl font-semibold mb-4">Post New Thread</div>
 
-        <button :disabled="submitting" @click="createThread" style="padding:10px">
-          {{ submitting ? "Creating..." : "Create" }}
-        </button>
+        <div class="flex flex-col gap-3">
+          <input v-model="title" class="asku-input" placeholder="Title" />
+          <textarea v-model="body" class="asku-textarea" rows="5" placeholder="Body" />
 
-        <div style="font-size:12px; color:#666">
-          Note: rate limit is enabled (3 threads/hour). If you spam, you'll get 429.
+          <div class="flex items-center gap-3">
+            <button class="asku-btn" :disabled="submitting || !title.trim() || !body.trim()" @click="createThread">
+              {{ submitting ? "Posting..." : "Post" }}
+            </button>
+            <button class="asku-btn-ghost" :disabled="submitting" @click="showNew = false">
+              Cancel
+            </button>
+          </div>
+
+          <div class="text-sm text-slate-500">
+            Note: rate limit is enabled (3 threads/hour). If you spam, you'll get 429.
+          </div>
         </div>
       </div>
-    </div>
+    </UiCard>
 
-    <div v-if="loading">Loading…</div>
-    <div v-if="error" style="color:red; white-space: pre-wrap">{{ error }}</div>
+    <div v-if="loading" class="asku-muted mt-4">Loading…</div>
+    <div v-if="error" class="asku-error mt-4">{{ error }}</div>
 
-    <div v-if="!loading && !error && threads.length === 0" style="color:#666">
-      No threads yet.
-    </div>
+    <div v-if="!loading && !error" class="flex flex-col gap-6 mt-4">
+      <UiCard v-for="t in threads" :key="t.id">
+        <div class="asku-card-pad">
+          <div class="flex items-start justify-between gap-6">
+            <router-link class="asku-thread-title" :to="`/threads/${t.id}`">
+              {{ t.title }}
+            </router-link>
+            <div class="asku-date">{{ fmt(t.createdAt) }}</div>
+          </div>
 
-    <ul v-if="threads.length" style="display:flex; flex-direction:column; gap:10px; padding-left:0; list-style:none">
-      <li v-for="t in threads" :key="t.id" style="border:1px solid #ddd; padding:12px; border-radius:8px">
-        <div style="display:flex; justify-content:space-between; gap:12px">
-          <router-link :to="`/threads/${t.id}`" style="font-weight:600">
-            {{ t.title }}
-          </router-link>
-          <div style="font-size:12px; color:#666">{{ fmt(t.createdAt) }}</div>
+          <div class="asku-meta">
+            {{ t.author.publicName }} · {{ t.status }}
+          </div>
+
+          <div class="asku-body">
+            {{ t.bodyPreview }}
+          </div>
+
+          <div class="flex justify-end mt-6">
+            <ReportMenu @select="onReport" />
+          </div>
         </div>
-        <div style="font-size:12px; color:#666; margin-top:6px">
-          {{ t.author.publicName }} · {{ t.status }}
-        </div>
-        <div style="margin-top:8px; color:#333">{{ t.bodyPreview }}</div>
-      </li>
-    </ul>
+      </UiCard>
+
+      <div v-if="threads.length === 0" class="asku-muted">
+        No threads yet.
+      </div>
+    </div>
   </div>
 </template>
