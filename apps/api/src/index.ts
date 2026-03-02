@@ -7,21 +7,164 @@ import { z } from "zod";
 import { devAuth, attachCoursePseudonym, requireModerator } from "./devAuth";
 import { ContentType, ReportStatus, ModActionType } from "@prisma/client";
 import { rateLimit } from "./rateLimit";
+import cookieParser from "cookie-parser";
+import { attachAuth, requireAuth } from "./authMiddleware";
+import { generateCode6, isUtEmail, randomToken, SESSION_COOKIE, sha256 } from "./auth";
+import { sendVerificationCodeEmail, smtpConfigured } from "./mailer";
 
 
 
 
 dotenv.config();
 
+
+async function cleanupExpiredSessions() {
+  await prisma.session.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
+}
+
+cleanupExpiredSessions().catch((e) => {
+  console.error("Failed to cleanup expired sessions:", e);
+});
+
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
 app.use(express.json());
-app.use(devAuth);
+app.use(cookieParser());
+app.use(attachAuth);
+if (process.env.DEV_AUTH === "true") {
+  app.use(devAuth);
+}
+
 
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
+
+// POST /api/v1/auth/request
+app.post(
+  "/api/v1/auth/request",
+  rateLimit("auth_request", 60 * 60 * 1000, 10),
+  async (req: Request, res: Response) => {  const schema = z.object({ email: z.string().email() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+
+  const email = parsed.data.email.toLowerCase().trim();
+  if (!isUtEmail(email)) return res.status(400).json({ error: "Only @ut.ee emails are allowed" });
+
+  const code = generateCode6();
+  const codeHash = sha256(code);
+
+  // invalidate old codes
+  await prisma.authCode.deleteMany({ where: { email } });
+
+  await prisma.authCode.create({
+    data: {
+      email,
+      codeHash,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min
+    },
+  });
+
+  // after you created authCode in DB
+
+ if (process.env.NODE_ENV !== "production") {
+   console.log(`[AUTH DEV] Code for ${email}: ${code}`);
+ }
+
+  res.json({ ok: true });
+});
+
+// POST /api/v1/auth/verify
+// POST /api/v1/auth/verify
+app.post(
+  "/api/v1/auth/verify",
+  rateLimit("auth_verify", 60 * 60 * 1000, 30),
+  async (req: Request, res: Response) => {  const schema = z.object({
+    email: z.string().email(),
+    code: z.string().min(6).max(6),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+
+  const email = parsed.data.email.toLowerCase().trim();
+  const code = parsed.data.code.trim();
+
+  const record = await prisma.authCode.findFirst({ where: { email } });
+  if (!record) return res.status(400).json({ error: "Code not found" });
+  if (record.expiresAt < new Date()) return res.status(400).json({ error: "Code expired" });
+
+  // attempt limit
+  if (record.attempts >= 5) return res.status(429).json({ error: "Too many attempts" });
+
+  const ok = sha256(code) === record.codeHash;
+  if (!ok) {
+    await prisma.authCode.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } });
+    return res.status(400).json({ error: "Invalid code" });
+  }
+
+  const now = new Date();
+
+  // dev placeholder for UT subject (until real SSO)
+  const utSubject = `email:${email}`;
+
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {
+      emailVerifiedAt: now,
+      utSubject,
+    },
+    create: {
+      email,
+      emailVerifiedAt: now,
+      utSubject,
+    },
+  });
+
+  // create session
+  const token = randomToken();
+  const tokenHash = sha256(token);
+
+  await prisma.session.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+    },
+  });
+
+  // delete used code
+  await prisma.authCode.deleteMany({ where: { email } });
+
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false, // локально false, в проде true
+    maxAge: 14 * 24 * 60 * 60 * 1000,
+  });
+
+  res.json({ ok: true });
+});
+
+// GET /api/v1/me
+app.get("/api/v1/me", requireAuth, async (req: Request, res: Response) => {
+  res.json({ id: req.user!.id, email: req.user!.email });
+});
+
+// POST /api/v1/auth/logout
+app.post("/api/v1/auth/logout", requireAuth, async (req: Request, res: Response) => {
+  const token = req.cookies?.[SESSION_COOKIE];
+  if (token) {
+    const tokenHash = sha256(token);
+    await prisma.session.deleteMany({ where: { tokenHash } });
+  }
+  res.clearCookie(SESSION_COOKIE);
+  res.json({ ok: true });
+});
+
+
 
 // GET /api/v1/courses
 app.get("/api/v1/courses", async (_req: Request, res: Response) => {

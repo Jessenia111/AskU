@@ -30,19 +30,6 @@ enum ModActionType {
   DELETE
 }
 
-model User {
-  id        String   @id @default(uuid())
-  utSubject String   @unique
-  email     String?
-  createdAt DateTime @default(now())
-
-  roles       UserRole[]
-  enrollments Enrollment[]
-  pseudonyms  Pseudonym[]
-  modActions  ModerationAction[]
-  auditLogs   AuditLog[]
-}
-
 model Role {
   id   String   @id @default(uuid())
   name RoleName @unique
@@ -172,4 +159,45 @@ model AuditLog {
   createdAt    DateTime @default(now())
 
   actor User @relation(fields: [actorUserId], references: [id])
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  sessions        Session[]
+  pseudonyms      Pseudonym[]
+
+  utSubject String   @unique
+  roles       UserRole[]
+  enrollments Enrollment[]
+  modActions  ModerationAction[]
+  auditLogs   AuditLog[]
+}
+
+model AuthCode {
+  id        String   @id @default(uuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([tokenHash])
 }
