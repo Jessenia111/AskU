@@ -15,7 +15,8 @@ function now() {
 function getKey(req: Request, action: string) {
   const userId = req.user?.id ?? "anon";
   const courseId = req.params.courseId ?? "no-course";
-  return `${action}:${userId}:${courseId}`;
+  const targetId = (req.body?.targetId as string | undefined) ?? "no-target";
+  return `${action}:${userId}:${courseId}:${targetId}`;
 }
 
 function cleanup(bucket: Bucket) {

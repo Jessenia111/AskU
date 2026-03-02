@@ -17,6 +17,10 @@ const router = createRouter({
     { path: "/courses", component: CoursesPage },
     { path: "/courses/:courseId", component: CourseThreadsPage },
     { path: "/threads/:threadId", component: ThreadPage },
+    
+    {path: "/moderation",
+      component: () => import("./pages/ModerationPage.vue"),
+    },
   ],
 });
 

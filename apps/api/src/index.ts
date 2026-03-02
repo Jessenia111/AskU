@@ -308,7 +308,7 @@ app.post("/api/v1/threads/:threadId/comments",
 
 // POST /api/v1/reports
 app.post("/api/v1/reports", 
-    rateLimit("create_report", 60 * 60 * 1000, 5),
+    rateLimit("create_report", 60 * 60 * 1000, process.env.NODE_ENV === "production" ? 5 : 100),
     async (req: Request, res: Response) => {
   const bodySchema = z.object({
     targetType: z.enum(["THREAD", "COMMENT"]),

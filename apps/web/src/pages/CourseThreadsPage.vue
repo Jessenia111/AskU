@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import { apiFetch } from "../api/client";
 import UiCard from "../components/UiCard.vue";
 import ReportMenu from "../components/ReportMenu.vue";
+import { useToast } from "../composables/useToast";
 
 type ThreadListItem = {
   id: string;
@@ -18,6 +19,8 @@ type ThreadListItem = {
 const route = useRoute();
 const courseId = computed(() => String(route.params.courseId));
 
+const toast = useToast();
+
 const threads = ref<ThreadListItem[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -26,6 +29,10 @@ const showNew = ref(false);
 const title = ref("");
 const body = ref("");
 const submitting = ref(false);
+
+const reportingKey = ref<string | null>(null);
+const lastReportKey = ref<string | null>(null);
+const lastReportAt = ref(0);
 
 function fmt(s: string) {
   return new Date(s).toLocaleString();
@@ -56,16 +63,45 @@ async function createThread() {
     title.value = "";
     body.value = "";
     showNew.value = false;
+    toast.push("success", "Thread posted");
     await load();
   } catch (e) {
+    toast.push("error", `Failed to post thread: ${String(e)}`);
     error.value = String(e);
   } finally {
     submitting.value = false;
   }
 }
 
-function onReport(_reason: "spam" | "abuse" | "other") {
-  alert("Report sent (stub). Hook API later.");
+async function submitReport(targetId: string, reason: "spam" | "abuse") {
+  const key = `THREAD:${targetId}:${reason}`;
+  const now = Date.now();
+
+  if (reportingKey.value) return;
+  if (lastReportKey.value === key && now - lastReportAt.value < 2000) return;
+
+  reportingKey.value = key;
+  lastReportKey.value = key;
+  lastReportAt.value = now;
+
+  const label = reason === "spam" ? "Spam" : "Abuse";
+
+  try {
+    await apiFetch("/api/v1/reports", {
+      method: "POST",
+      body: JSON.stringify({
+        targetType: "THREAD",
+        targetId,
+        reason,
+      }),
+    });
+
+    toast.push("success", `Report submitted: ${label}`);
+  } catch (e) {
+    toast.push("error", `Report failed (${label}): ${String(e)}`);
+  } finally {
+    reportingKey.value = null;
+  }
 }
 
 onMounted(load);
@@ -74,7 +110,7 @@ onMounted(load);
 <template>
   <div>
     <div class="asku-subheader">
-      <router-link class="asku-back" to="/">← Courses</router-link>
+      <router-link class="asku-back" to="/courses">← Courses</router-link>
       <div class="asku-section-title">Threads</div>
     </div>
 
@@ -88,13 +124,26 @@ onMounted(load);
 
         <div class="flex flex-col gap-3">
           <input v-model="title" class="asku-input" placeholder="Title" />
-          <textarea v-model="body" class="asku-textarea" rows="5" placeholder="Body" />
+          <textarea
+            v-model="body"
+            class="asku-textarea"
+            rows="5"
+            placeholder="Body"
+          />
 
           <div class="flex items-center gap-3">
-            <button class="asku-btn" :disabled="submitting || !title.trim() || !body.trim()" @click="createThread">
+            <button
+              class="asku-btn"
+              :disabled="submitting || !title.trim() || !body.trim()"
+              @click="createThread"
+            >
               {{ submitting ? "Posting..." : "Post" }}
             </button>
-            <button class="asku-btn-ghost" :disabled="submitting" @click="showNew = false">
+            <button
+              class="asku-btn-ghost"
+              :disabled="submitting"
+              @click="showNew = false"
+            >
               Cancel
             </button>
           </div>
@@ -128,7 +177,10 @@ onMounted(load);
           </div>
 
           <div class="flex justify-end mt-6">
-            <ReportMenu @select="onReport" />
+            <ReportMenu
+              :disabled="reportingKey?.startsWith(`THREAD:${t.id}:`) ?? false"
+              @select="(reason) => submitReport(t.id, reason)"
+            />
           </div>
         </div>
       </UiCard>

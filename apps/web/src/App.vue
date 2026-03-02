@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppHeader from "./components/AppHeader.vue";
+import ToastHost from "./components/ToastHost.vue";
 </script>
 
 <template>
@@ -8,5 +9,7 @@ import AppHeader from "./components/AppHeader.vue";
     <main class="asku-main">
       <router-view />
     </main>
+
+    <ToastHost />
   </div>
 </template>

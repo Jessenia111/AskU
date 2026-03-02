@@ -1,46 +1,62 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount, onMounted } from "vue";
+import { ref } from "vue";
+
+const props = defineProps<{
+  disabled?: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: "select", reason: "spam" | "abuse"): void;
+}>();
 
 const open = ref(false);
 
-function toggle() {
-  open.value = !open.value;
-}
-
-function close() {
+function choose(reason: "spam" | "abuse") {
+  if (props.disabled) return;
   open.value = false;
-}
-
-function onDocClick(e: MouseEvent) {
-  const target = e.target as HTMLElement | null;
-  if (!target) return;
-  if (target.closest("[data-report-root]")) return;
-  close();
-}
-
-onMounted(() => document.addEventListener("click", onDocClick));
-onBeforeUnmount(() => document.removeEventListener("click", onDocClick));
-
-const emit = defineEmits<{
-  (e: "select", reason: "spam" | "abuse" | "other"): void;
-}>();
-
-function pick(reason: "spam" | "abuse" | "other") {
   emit("select", reason);
-  close();
+}
+
+function toggle() {
+  if (props.disabled) return;
+  open.value = !open.value;
 }
 </script>
 
 <template>
-  <div class="asku-dropdown" data-report-root>
-    <button class="asku-btn-ghost" @click="toggle">
-      Report <span style="margin-left: 6px; font-size: 12px; opacity: 0.6">▼</span>
+  <div class="report-wrap">
+    <button class="asku-btn-ghost" :disabled="disabled" @click="toggle">
+      {{ disabled ? "Reporting..." : "Report" }} <span style="opacity:.7">▼</span>
     </button>
 
-    <div v-if="open" class="asku-dropdown-menu">
-      <button class="asku-dropdown-item" @click="pick('spam')">Spam</button>
-      <button class="asku-dropdown-item" @click="pick('abuse')">Abuse</button>
-      <button class="asku-dropdown-item" @click="pick('other')">Other</button>
+    <div v-if="open" class="report-menu">
+      <button class="report-item" @click="choose('spam')">Spam</button>
+      <button class="report-item" @click="choose('abuse')">Abuse</button>
     </div>
   </div>
 </template>
+
+<style scoped>
+.report-wrap { position: relative; }
+.report-menu {
+  position: absolute;
+  right: 0;
+  bottom: 44px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  min-width: 160px;
+  padding: 6px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.12);
+}
+.report-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 10px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.report-item:hover { background: #f3f4f6; }
+</style>
