@@ -11,7 +11,7 @@ type ReportItem = {
   courseId: string;
   targetType: "THREAD" | "COMMENT";
   targetId: string;
-  reason: string;
+  reason: "SPAM" | "ABUSE" | string;
   status: string;
 };
 
@@ -30,12 +30,24 @@ function fmt(s: string) {
   return new Date(s).toLocaleString();
 }
 
+function labelReason(r: string) {
+  if (r === "SPAM") return "Spam";
+  if (r === "ABUSE") return "Abuse";
+  return r;
+}
+
 function saveKey() {
   localStorage.setItem("ASKU_MOD_KEY", keyInput.value.trim());
   toast.push("success", "Moderator key saved");
 }
 
 async function load() {
+  if (!modKey.value) {
+    reports.value = [];
+    error.value = "Enter MOD_KEY first.";
+    return;
+  }
+
   loading.value = true;
   error.value = null;
   try {
@@ -50,9 +62,13 @@ async function load() {
 }
 
 async function act(report: ReportItem, actionType: "HIDE" | "DELETE") {
+  if (!modKey.value) {
+    toast.push("error", "Missing MOD_KEY");
+    return;
+  }
   if (actingId.value) return;
-  actingId.value = report.id;
 
+  actingId.value = report.id;
   try {
     await apiFetch("/api/v1/moderation/actions", {
       method: "POST",
@@ -75,7 +91,9 @@ async function act(report: ReportItem, actionType: "HIDE" | "DELETE") {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  if (modKey.value) load();
+});
 </script>
 
 <template>
@@ -95,7 +113,7 @@ onMounted(load);
         <div class="flex gap-3 items-center">
           <input v-model="keyInput" class="asku-input" placeholder="MOD_KEY" />
           <button class="asku-btn" :disabled="!modKey" @click="saveKey">Save</button>
-          <button class="asku-btn-ghost" :disabled="!modKey" @click="load">Reload</button>
+          <button class="asku-btn-ghost" :disabled="!modKey" @click="load">Load reports</button>
         </div>
 
         <div v-if="error" class="asku-error mt-4">{{ error }}</div>
@@ -109,7 +127,7 @@ onMounted(load);
         <div class="asku-card-pad">
           <div class="flex items-start justify-between gap-6">
             <div class="text-lg font-semibold">
-              {{ r.targetType }} · {{ r.reason }}
+              {{ r.targetType }} · {{ labelReason(r.reason) }}
             </div>
             <div class="asku-date">{{ fmt(r.createdAt) }}</div>
           </div>
@@ -134,7 +152,7 @@ onMounted(load);
       </UiCard>
 
       <div v-if="reports.length === 0" class="asku-muted">
-        No open reports 🎉
+        No open reports
       </div>
     </div>
   </div>

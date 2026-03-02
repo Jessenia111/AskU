@@ -78,13 +78,14 @@ async function submitReport(targetId: string, reason: "spam" | "abuse") {
   const now = Date.now();
 
   if (reportingKey.value) return;
-  if (lastReportKey.value === key && now - lastReportAt.value < 2000) return;
+  if (lastReportKey.value === key && now - lastReportAt.value < 1200) return;
 
   reportingKey.value = key;
   lastReportKey.value = key;
   lastReportAt.value = now;
 
   const label = reason === "spam" ? "Spam" : "Abuse";
+  const apiReason = reason === "spam" ? "SPAM" : "ABUSE";
 
   try {
     await apiFetch("/api/v1/reports", {
@@ -92,7 +93,7 @@ async function submitReport(targetId: string, reason: "spam" | "abuse") {
       body: JSON.stringify({
         targetType: "THREAD",
         targetId,
-        reason,
+        reason: apiReason,
       }),
     });
 
@@ -124,12 +125,7 @@ onMounted(load);
 
         <div class="flex flex-col gap-3">
           <input v-model="title" class="asku-input" placeholder="Title" />
-          <textarea
-            v-model="body"
-            class="asku-textarea"
-            rows="5"
-            placeholder="Body"
-          />
+          <textarea v-model="body" class="asku-textarea" rows="5" placeholder="Body" />
 
           <div class="flex items-center gap-3">
             <button
@@ -139,11 +135,7 @@ onMounted(load);
             >
               {{ submitting ? "Posting..." : "Post" }}
             </button>
-            <button
-              class="asku-btn-ghost"
-              :disabled="submitting"
-              @click="showNew = false"
-            >
+            <button class="asku-btn-ghost" :disabled="submitting" @click="showNew = false">
               Cancel
             </button>
           </div>
@@ -178,7 +170,7 @@ onMounted(load);
 
           <div class="flex justify-end mt-6">
             <ReportMenu
-              :disabled="reportingKey?.startsWith(`THREAD:${t.id}:`) ?? false"
+              :disabled="(reportingKey?.startsWith(`THREAD:${t.id}:`) ?? false)"
               @select="(reason) => submitReport(t.id, reason)"
             />
           </div>

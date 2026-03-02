@@ -201,44 +201,46 @@ app.get(
 );
 
 // GET /api/v1/threads/:threadId
-app.get(
-  "/api/v1/threads/:threadId",
-  async (req: Request, res: Response) => {
-    const { threadId } = req.params;
+app.get("/api/v1/threads/:threadId", async (req: Request, res: Response) => {
+  const { threadId } = req.params;
 
-    const thread = await prisma.thread.findFirst({
-      where: { id: threadId, isHidden: false },
-      include: {
-        author: { select: { publicName: true } },
-        comments: {
-          where: { isHidden: false },
-          orderBy: { createdAt: "asc" },
-          include: { author: { select: { publicName: true } } },
-        },
+  const thread = await prisma.thread.findFirst({
+    where: { id: threadId, isHidden: false },
+    include: {
+      author: { select: { publicName: true, userId: true } },
+      comments: {
+        where: { isHidden: false },
+        orderBy: { createdAt: "asc" },
+        include: { author: { select: { publicName: true, userId: true } } },
       },
-    });
+    },
+  });
 
-    if (!thread) {
-      return res.status(404).json({ error: "Thread not found" });
-    }
-
-    res.json({
-      id: thread.id,
-      courseId: thread.courseId,
-      author: { publicName: thread.author.publicName },
-      title: thread.title,
-      body: thread.body,
-      status: thread.status,
-      createdAt: thread.createdAt,
-      comments: thread.comments.map((c) => ({
-        id: c.id,
-        body: c.body,
-        createdAt: c.createdAt,
-        author: { publicName: c.author.publicName },
-      })),
-    });
+  if (!thread) {
+    return res.status(404).json({ error: "Thread not found" });
   }
-);
+
+  const myUserId = req.user?.id ?? null;
+  const threadIsMine = myUserId ? thread.author.userId === myUserId : false;
+
+  res.json({
+    id: thread.id,
+    courseId: thread.courseId,
+    author: { publicName: thread.author.publicName },
+    isMine: threadIsMine,
+    title: thread.title,
+    body: thread.body,
+    status: thread.status,
+    createdAt: thread.createdAt,
+    comments: thread.comments.map((c) => ({
+      id: c.id,
+      body: c.body,
+      createdAt: c.createdAt,
+      author: { publicName: c.author.publicName },
+      isMine: myUserId ? c.author.userId === myUserId : false,
+    })),
+  });
+});
 
 
 app.post(
@@ -307,69 +309,70 @@ app.post("/api/v1/threads/:threadId/comments",
 
 
 // POST /api/v1/reports
-app.post("/api/v1/reports", 
-    rateLimit("create_report", 60 * 60 * 1000, process.env.NODE_ENV === "production" ? 5 : 100),
-    async (req: Request, res: Response) => {
-  const bodySchema = z.object({
-    targetType: z.enum(["THREAD", "COMMENT"]),
-    targetId: z.string().uuid(),
-    reason: z.string().min(2).max(50),
-    details: z.string().max(1000).optional(),
-  });
-
-  const parsed = bodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
-  }
-
-  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-
-  // Find courseId of the target so we can use correct course pseudonym for reporter
-  let courseId: string | null = null;
-
-  if (parsed.data.targetType === "THREAD") {
-    const t = await prisma.thread.findUnique({ where: { id: parsed.data.targetId } });
-    if (!t || t.isHidden) return res.status(404).json({ error: "Thread not found" });
-    courseId = t.courseId;
-  } else {
-    const c = await prisma.comment.findUnique({
-      where: { id: parsed.data.targetId },
-      include: { thread: true },
+app.post(
+  "/api/v1/reports",
+  rateLimit("create_report", 60 * 60 * 1000, process.env.NODE_ENV === "production" ? 5 : 100),
+  async (req: Request, res: Response) => {
+    const bodySchema = z.object({
+      targetType: z.enum(["THREAD", "COMMENT"]),
+      targetId: z.string().uuid(),
+      reason: z.enum(["SPAM", "ABUSE"]),
+      details: z.string().max(1000).optional(),
     });
-    if (!c || c.isHidden) return res.status(404).json({ error: "Comment not found" });
-    courseId = c.thread.courseId;
+
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
+    }
+
+    if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+
+    // Find courseId of the target so we can use correct course pseudonym for reporter
+    let courseId: string | null = null;
+
+    if (parsed.data.targetType === "THREAD") {
+      const t = await prisma.thread.findUnique({ where: { id: parsed.data.targetId } });
+      if (!t || t.isHidden) return res.status(404).json({ error: "Thread not found" });
+      courseId = t.courseId;
+    } else {
+      const c = await prisma.comment.findUnique({
+        where: { id: parsed.data.targetId },
+        include: { thread: true },
+      });
+      if (!c || c.isHidden) return res.status(404).json({ error: "Comment not found" });
+      courseId = c.thread.courseId;
+    }
+
+    const reporterPseudo = await prisma.pseudonym.findUnique({
+      where: { userId_courseId: { userId: req.user.id, courseId } },
+    });
+
+    if (!reporterPseudo) return res.status(403).json({ error: "No pseudonym for this course" });
+
+    const report = await prisma.report.create({
+      data: {
+        reporterPseudonymId: reporterPseudo.id,
+        targetType: parsed.data.targetType as ContentType,
+        targetId: parsed.data.targetId,
+        reason: parsed.data.reason, // SPAM | ABUSE
+        details: parsed.data.details,
+        status: ReportStatus.OPEN,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        actorUserId: req.user.id,
+        eventType: "REPORT_CREATED",
+        entityType: parsed.data.targetType,
+        entityId: report.id,
+        metadataJson: { targetId: parsed.data.targetId, reason: parsed.data.reason },
+      },
+    });
+
+    res.status(201).json({ id: report.id });
   }
-
-  const reporterPseudo = await prisma.pseudonym.findUnique({
-    where: { userId_courseId: { userId: req.user.id, courseId } },
-  });
-
-  if (!reporterPseudo) return res.status(403).json({ error: "No pseudonym for this course" });
-
-  const report = await prisma.report.create({
-    data: {
-      reporterPseudonymId: reporterPseudo.id,
-      targetType: parsed.data.targetType as ContentType,
-      targetId: parsed.data.targetId,
-      reason: parsed.data.reason,
-      details: parsed.data.details,
-      status: ReportStatus.OPEN,
-    },
-  });
-
-  // Minimal audit log
-  await prisma.auditLog.create({
-    data: {
-      actorUserId: req.user.id,
-      eventType: "REPORT_CREATED",
-      entityType: parsed.data.targetType,
-      entityId: report.id,
-      metadataJson: { targetId: parsed.data.targetId, reason: parsed.data.reason },
-    },
-  });
-
-  res.status(201).json({ id: report.id });
-});
+);
 
 // GET /api/v1/moderation/reports
 app.get("/api/v1/moderation/reports", requireModerator, async (_req: Request, res: Response) => {
@@ -460,6 +463,66 @@ app.post("/api/v1/moderation/actions", requireModerator, async (req: Request, re
   });
 
   res.status(201).json({ id: action.id });
+});
+
+// DELETE /api/v1/threads/:threadId (author can hide own thread)
+app.delete("/api/v1/threads/:threadId", requireAuth, async (req: Request, res: Response) => {
+  const { threadId } = req.params;
+
+  const thread = await prisma.thread.findUnique({
+    where: { id: threadId },
+    include: { author: { select: { userId: true } } },
+  });
+
+  if (!thread || thread.isHidden) return res.status(404).json({ error: "Thread not found" });
+  if (thread.author.userId !== req.user!.id) return res.status(403).json({ error: "Not allowed" });
+
+  await prisma.thread.update({
+    where: { id: threadId },
+    data: { isHidden: true },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: req.user!.id,
+      eventType: "THREAD_HIDDEN_BY_AUTHOR",
+      entityType: "THREAD",
+      entityId: threadId,
+      metadataJson: {},
+    },
+  });
+
+  return res.status(204).send();
+});
+
+// DELETE /api/v1/comments/:commentId (author can hide own comment)
+app.delete("/api/v1/comments/:commentId", requireAuth, async (req: Request, res: Response) => {
+  const { commentId } = req.params;
+
+  const comment = await prisma.comment.findUnique({
+    where: { id: commentId },
+    include: { author: { select: { userId: true } } },
+  });
+
+  if (!comment || comment.isHidden) return res.status(404).json({ error: "Comment not found" });
+  if (comment.author.userId !== req.user!.id) return res.status(403).json({ error: "Not allowed" });
+
+  await prisma.comment.update({
+    where: { id: commentId },
+    data: { isHidden: true },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: req.user!.id,
+      eventType: "COMMENT_HIDDEN_BY_AUTHOR",
+      entityType: "COMMENT",
+      entityId: commentId,
+      metadataJson: {},
+    },
+  });
+
+  return res.status(204).send();
 });
 
 const port = Number(process.env.PORT ?? 8000);
