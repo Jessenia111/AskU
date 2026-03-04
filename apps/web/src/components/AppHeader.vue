@@ -1,31 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 import { useToast } from "../composables/useToast";
-
-const props = defineProps<{
-  initials: string;
-}>();
+import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
 const toast = useToast();
+const auth = useAuthStore();
 
 const open = ref(false);
-const me = ref<{ id: string; email: string } | null>(null);
-
-async function loadMe() {
-  try {
-    me.value = await apiFetch("/api/v1/me");
-  } catch {
-    me.value = null;
-  }
-}
 
 async function logout() {
   try {
     await apiFetch("/api/v1/auth/logout", { method: "POST" });
   } catch {}
+  auth.clear();
   toast.push("info", "Logged out");
   open.value = false;
   await router.push("/login");
@@ -35,14 +25,12 @@ function go(path: string) {
   open.value = false;
   router.push(path);
 }
-
-onMounted(loadMe);
 </script>
 
 <template>
   <header class="asku-header">
     <div class="asku-brand" @click="go('/courses')">
-      <div class="asku-avatar">{{ props.initials }}</div>
+      <div class="asku-avatar">{{ auth.initials }}</div>
       <div>
         <div class="asku-title">AskU</div>
         <div class="asku-subtitle">Anonymous student questions</div>
@@ -50,7 +38,7 @@ onMounted(loadMe);
     </div>
 
     <div class="asku-header-right">
-      <div v-if="me" class="asku-me">{{ me.email }}</div>
+      <div v-if="auth.user" class="asku-me">{{ auth.user.email }}</div>
 
       <button class="asku-menu-btn" @click="open = !open">≡</button>
 

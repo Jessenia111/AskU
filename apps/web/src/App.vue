@@ -5,7 +5,7 @@ import ToastHost from "./components/ToastHost.vue";
 
 <template>
   <div class="asku-shell">
-    <AppHeader initials="U" />
+    <AppHeader />
     <main class="asku-main">
       <router-view />
     </main>
