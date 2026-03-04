@@ -29,26 +29,6 @@
         @apply bg-white border-b border-slate-200;
     }
 
-    .asku-header-inner {
-        @apply max-w-5xl mx-auto px-6 py-4 flex items-center justify-between;
-    }
-
-    .asku-brand {
-        @apply flex items-center gap-4;
-    }
-
-    .asku-avatar {
-        @apply w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold;
-    }
-
-    .asku-brand-title {
-        @apply text-2xl font-semibold leading-none;
-    }
-
-    .asku-brand-subtitle {
-        @apply text-slate-500 text-base mt-1;
-    }
-
     .asku-menu-btn {
         @apply w-12 h-12 rounded-xl border border-slate-200 bg-white shadow-sm flex items-center justify-center hover:bg-slate-50;
     }
@@ -116,10 +96,6 @@
         @apply text-slate-500 text-base;
     }
 
-    .asku-divider {
-        @apply border-t border-slate-200 my-6;
-    }
-
     .asku-input {
         @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-200;
     }
@@ -138,18 +114,6 @@
 
     .asku-btn-danger {
         @apply inline-flex items-center justify-center rounded-xl bg-red-600 text-white px-5 py-3 font-medium hover:bg-red-500 disabled:opacity-60 disabled:cursor-not-allowed;
-    }
-
-    .asku-dropdown {
-        @apply relative inline-block;
-    }
-
-    .asku-dropdown-menu {
-        @apply absolute right-0 mt-2 w-44 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden z-50;
-    }
-
-    .asku-dropdown-item {
-        @apply w-full text-left px-4 py-3 text-slate-700 hover:bg-slate-50;
     }
 
     .asku-error {

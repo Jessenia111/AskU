@@ -113,7 +113,6 @@ onMounted(() => {
     <div v-if="!auth.isModerator">
       <UiCard :topbar="false">
         <div class="asku-card-pad text-center py-8">
-          <div class="text-4xl mb-3">🔒</div>
           <div class="text-lg font-semibold text-slate-700">Access restricted</div>
           <div class="text-sm text-slate-500 mt-2">
             You need the Moderator role to access this panel.

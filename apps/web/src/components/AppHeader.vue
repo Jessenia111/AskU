@@ -4,12 +4,15 @@ import { useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 import { useToast } from "../composables/useToast";
 import { useAuthStore } from "../stores/auth";
+import { useClickOutside } from "../composables/useClickOutside";
 
 const router = useRouter();
 const toast = useToast();
 const auth = useAuthStore();
 
 const open = ref(false);
+const menuRef = ref<HTMLElement | null>(null);
+useClickOutside(menuRef, () => { open.value = false; });
 
 async function logout() {
   try {
@@ -37,7 +40,7 @@ function go(path: string) {
       </div>
     </div>
 
-    <div class="asku-header-right">
+    <div ref="menuRef" class="asku-header-right">
       <div v-if="auth.user" class="asku-me">{{ auth.user.email }}</div>
 
       <button class="asku-menu-btn" @click="open = !open">≡</button>

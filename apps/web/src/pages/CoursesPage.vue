@@ -30,8 +30,10 @@ onMounted(load);
     <div v-if="loading" class="asku-muted">Loading…</div>
     <div v-if="error" class="asku-error">{{ error }}</div>
 
-    <div v-if="!loading && !error && courses.length === 0" class="asku-muted">
-      No courses available yet.
+    <div v-if="!loading && !error && courses.length === 0" class="flex flex-col items-center gap-3 py-16 text-center">
+      <div class="text-4xl">📚</div>
+      <div class="text-lg font-semibold text-slate-700">No courses yet</div>
+      <div class="text-sm text-slate-400">Courses will appear here once they are added.</div>
     </div>
 
     <div v-if="!loading && !error && courses.length > 0" class="asku-grid">
@@ -39,14 +41,14 @@ onMounted(load);
         v-for="c in courses"
         :key="c.id"
         :to="`/courses/${c.id}`"
-        style="text-decoration:none"
+        class="no-underline"
       >
         <div class="asku-card h-full">
           <div class="asku-card-topbar"></div>
           <div class="asku-card-pad">
-            <div style="font-size:22px; font-weight:700; color:#1d4ed8">{{ c.code }}</div>
-            <div style="font-size:18px; margin-top:6px; color:#334155">{{ c.title }}</div>
-            <div class="asku-muted" style="margin-top:14px">{{ c.semester }}</div>
+            <div class="text-xl font-bold text-blue-700">{{ c.code }}</div>
+            <div class="mt-1.5 text-lg text-slate-700">{{ c.title }}</div>
+            <div class="mt-3 text-sm text-slate-500">{{ c.semester }}</div>
           </div>
         </div>
       </router-link>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useClickOutside } from "../composables/useClickOutside";
 
 const props = defineProps<{
   disabled?: boolean;
@@ -10,6 +11,8 @@ const emit = defineEmits<{
 }>();
 
 const open = ref(false);
+const wrapRef = ref<HTMLElement | null>(null);
+useClickOutside(wrapRef, () => { open.value = false; });
 
 function choose(reason: "spam" | "abuse") {
   if (props.disabled) return;
@@ -24,7 +27,7 @@ function toggle() {
 </script>
 
 <template>
-  <div class="report-wrap">
+  <div ref="wrapRef" class="report-wrap">
     <button
       class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
       :disabled="disabled"
