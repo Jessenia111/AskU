@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { prisma } from "./prisma";
 import { z } from "zod";
 import { devAuth, attachCoursePseudonym, requireModerator } from "./devAuth";
@@ -18,6 +18,12 @@ import { generatePseudonymName } from "./nameGen";
 
 dotenv.config({ override: true });
 
+/** Wraps an async route handler so unhandled rejections reach Express's error middleware. */
+function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    fn(req, res, next).catch(next);
+  };
+}
 
 async function cleanupExpiredSessions() {
   await prisma.session.deleteMany({
@@ -50,8 +56,8 @@ app.get("/health", (_req: Request, res: Response) => {
 // POST /api/v1/auth/request
 app.post(
   "/api/v1/auth/request",
-  rateLimit("auth_request", 60 * 60 * 1000, 10),
-  async (req: Request, res: Response) => {  const schema = z.object({ email: z.string().email() });
+  rateLimit("auth_request", 60 * 60 * 1000, 10, true),
+  asyncHandler(async (req, res) => {  const schema = z.object({ email: z.string().email() });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
 
@@ -87,14 +93,14 @@ app.post(
   }
 
   res.json({ ok: true });
-});
+  }),
+);
 
-// POST /api/v1/auth/verify
 // POST /api/v1/auth/verify
 app.post(
   "/api/v1/auth/verify",
-  rateLimit("auth_verify", 60 * 60 * 1000, 30),
-  async (req: Request, res: Response) => {  const schema = z.object({
+  rateLimit("auth_verify", 60 * 60 * 1000, 30, true),
+  asyncHandler(async (req, res) => {  const schema = z.object({
     email: z.string().email(),
     code: z.string().min(6).max(6),
   });
@@ -158,10 +164,11 @@ app.post(
   });
 
   res.json({ ok: true });
-});
+  }),
+);
 
 // GET /api/v1/me
-app.get("/api/v1/me", requireAuth, async (req: Request, res: Response) => {
+app.get("/api/v1/me", requireAuth, asyncHandler(async (req, res) => {
   const modRole = await prisma.role.findUnique({ where: { name: "MODERATOR" } });
   const isModerator = modRole
     ? !!(await prisma.userRole.findUnique({
@@ -170,10 +177,10 @@ app.get("/api/v1/me", requireAuth, async (req: Request, res: Response) => {
     : false;
 
   res.json({ id: req.user!.id, email: req.user!.email, isModerator });
-});
+}));
 
 // POST /api/v1/auth/logout
-app.post("/api/v1/auth/logout", requireAuth, async (req: Request, res: Response) => {
+app.post("/api/v1/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   const token = req.cookies?.[SESSION_COOKIE];
   if (token) {
     const tokenHash = sha256(token);
@@ -181,21 +188,19 @@ app.post("/api/v1/auth/logout", requireAuth, async (req: Request, res: Response)
   }
   res.clearCookie(SESSION_COOKIE);
   res.json({ ok: true });
-});
-
-
+}));
 
 // GET /api/v1/courses/:courseId/my-pseudonym — returns current user's pseudonym for a course
-app.get("/api/v1/courses/:courseId/my-pseudonym", requireAuth, async (req: Request, res: Response) => {
+app.get("/api/v1/courses/:courseId/my-pseudonym", requireAuth, asyncHandler(async (req, res) => {
   const { courseId } = req.params;
   const pseudonym = await prisma.pseudonym.findUnique({
     where: { userId_courseId: { userId: req.user!.id, courseId } },
   });
   res.json({ publicName: pseudonym?.publicName ?? null });
-});
+}));
 
 // GET /api/v1/me/pseudonyms — all pseudonyms for the logged-in user
-app.get("/api/v1/me/pseudonyms", requireAuth, async (req: Request, res: Response) => {
+app.get("/api/v1/me/pseudonyms", requireAuth, asyncHandler(async (req, res) => {
   const pseudonyms = await prisma.pseudonym.findMany({
     where: { userId: req.user!.id },
     include: { course: { select: { id: true, code: true, title: true, semester: true } } },
@@ -210,20 +215,20 @@ app.get("/api/v1/me/pseudonyms", requireAuth, async (req: Request, res: Response
       publicName: p.publicName,
     }))
   );
-});
+}));
 
 // GET /api/v1/courses
-app.get("/api/v1/courses", async (_req: Request, res: Response) => {
+app.get("/api/v1/courses", asyncHandler(async (_req, res) => {
   const courses = await prisma.course.findMany({
     orderBy: { createdAt: "desc" },
   });
   res.json(courses);
-});
+}));
 
 // GET /api/v1/courses/:courseId/threads
 app.get(
   "/api/v1/courses/:courseId/threads",
-  async (req: Request, res: Response) => {
+  asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const skip = Math.max(0, Number(req.query.skip ?? 0));
     const take = Math.min(50, Math.max(1, Number(req.query.take ?? 20)));
@@ -253,11 +258,11 @@ app.get(
       skip,
       take,
     });
-  }
+  }),
 );
 
 // GET /api/v1/threads/:threadId
-app.get("/api/v1/threads/:threadId", async (req: Request, res: Response) => {
+app.get("/api/v1/threads/:threadId", asyncHandler(async (req, res) => {
   const { threadId } = req.params;
 
   const thread = await prisma.thread.findFirst({
@@ -296,14 +301,14 @@ app.get("/api/v1/threads/:threadId", async (req: Request, res: Response) => {
       isMine: myUserId ? c.author.userId === myUserId : false,
     })),
   });
-});
-
+}));
 
 app.post(
   "/api/v1/courses/:courseId/threads",
+  requireAuth,
   rateLimit("create_thread", 60 * 60 * 1000, 3),
   attachCoursePseudonym,
-  async (req: Request, res: Response) => {
+  asyncHandler(async (req, res) => {
     const { courseId } = req.params;
 
     const bodySchema = z.object({
@@ -326,12 +331,13 @@ app.post(
     });
 
     res.status(201).json({ id: thread.id });
-  }
+  }),
 );
 
 app.post("/api/v1/threads/:threadId/comments",
+  requireAuth,
   rateLimit("create_comment", 60 * 60 * 1000, 10),
-  async (req: Request, res: Response) => {
+  asyncHandler(async (req, res) => {
   const { threadId } = req.params;
 
   const bodySchema = z.object({
@@ -341,14 +347,12 @@ app.post("/api/v1/threads/:threadId/comments",
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
 
-  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
-
   const thread = await prisma.thread.findUnique({ where: { id: threadId } });
   if (!thread || thread.isHidden) return res.status(404).json({ error: "Thread not found" });
 
   // Need pseudonym in the same course as thread — auto-create if missing
   let pseudonym = await prisma.pseudonym.findUnique({
-    where: { userId_courseId: { userId: req.user.id, courseId: thread.courseId } },
+    where: { userId_courseId: { userId: req.user!.id, courseId: thread.courseId } },
   });
 
   if (!pseudonym) {
@@ -356,7 +360,7 @@ app.post("/api/v1/threads/:threadId/comments",
     while (!pseudonym && attempts < 5) {
       try {
         pseudonym = await prisma.pseudonym.create({
-          data: { userId: req.user.id, courseId: thread.courseId, publicName: generatePseudonymName() },
+          data: { userId: req.user!.id, courseId: thread.courseId, publicName: generatePseudonymName() },
         });
       } catch {
         attempts++;
@@ -374,14 +378,15 @@ app.post("/api/v1/threads/:threadId/comments",
   });
 
   res.status(201).json({ id: comment.id });
-});
-
+  }),
+);
 
 // POST /api/v1/reports
 app.post(
   "/api/v1/reports",
+  requireAuth,
   rateLimit("create_report", 60 * 60 * 1000, process.env.NODE_ENV === "production" ? 5 : 100),
-  async (req: Request, res: Response) => {
+  asyncHandler(async (req, res) => {
     const bodySchema = z.object({
       targetType: z.enum(["THREAD", "COMMENT"]),
       targetId: z.string().uuid(),
@@ -393,8 +398,6 @@ app.post(
     if (!parsed.success) {
       return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
     }
-
-    if (!req.user) return res.status(401).json({ error: "Not authenticated" });
 
     // Find courseId of the target so we can use correct course pseudonym for reporter
     let courseId: string | null = null;
@@ -413,7 +416,7 @@ app.post(
     }
 
     const reporterPseudo = await prisma.pseudonym.findUnique({
-      where: { userId_courseId: { userId: req.user.id, courseId } },
+      where: { userId_courseId: { userId: req.user!.id, courseId } },
     });
 
     if (!reporterPseudo) return res.status(403).json({ error: "No pseudonym for this course" });
@@ -423,7 +426,7 @@ app.post(
         reporterPseudonymId: reporterPseudo.id,
         targetType: parsed.data.targetType as ContentType,
         targetId: parsed.data.targetId,
-        reason: parsed.data.reason, // SPAM | ABUSE
+        reason: parsed.data.reason,
         details: parsed.data.details,
         status: ReportStatus.OPEN,
       },
@@ -431,7 +434,7 @@ app.post(
 
     await prisma.auditLog.create({
       data: {
-        actorUserId: req.user.id,
+        actorUserId: req.user!.id,
         eventType: "REPORT_CREATED",
         entityType: parsed.data.targetType,
         entityId: report.id,
@@ -440,11 +443,11 @@ app.post(
     });
 
     res.status(201).json({ id: report.id });
-  }
+  }),
 );
 
 // GET /api/v1/moderation/reports
-app.get("/api/v1/moderation/reports", requireAuth, requireModerator, async (_req: Request, res: Response) => {
+app.get("/api/v1/moderation/reports", requireAuth, requireModerator, asyncHandler(async (_req, res) => {
   const reports = await prisma.report.findMany({
     where: { status: "OPEN" },
     orderBy: { createdAt: "desc" },
@@ -497,11 +500,10 @@ app.get("/api/v1/moderation/reports", requireAuth, requireModerator, async (_req
       };
     })
   );
-});
-
+}));
 
 // POST /api/v1/moderation/actions
-app.post("/api/v1/moderation/actions", requireAuth, requireModerator, async (req: Request, res: Response) => {
+app.post("/api/v1/moderation/actions", requireAuth, requireModerator, asyncHandler(async (req, res) => {
   const bodySchema = z.object({
     reportId: z.string().uuid().optional(),
     actionType: z.enum(["HIDE", "DELETE"]),
@@ -561,10 +563,10 @@ app.post("/api/v1/moderation/actions", requireAuth, requireModerator, async (req
   });
 
   res.status(201).json({ id: action.id });
-});
+}));
 
 // POST /api/v1/moderation/dismiss — close a report without taking action on content
-app.post("/api/v1/moderation/dismiss", requireAuth, requireModerator, async (req: Request, res: Response) => {
+app.post("/api/v1/moderation/dismiss", requireAuth, requireModerator, asyncHandler(async (req, res) => {
   const bodySchema = z.object({ reportId: z.string().uuid() });
   const parsed = bodySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
@@ -588,10 +590,10 @@ app.post("/api/v1/moderation/dismiss", requireAuth, requireModerator, async (req
   });
 
   res.json({ ok: true });
-});
+}));
 
 // DELETE /api/v1/threads/:threadId (author can hide own thread)
-app.delete("/api/v1/threads/:threadId", requireAuth, async (req: Request, res: Response) => {
+app.delete("/api/v1/threads/:threadId", requireAuth, asyncHandler(async (req, res) => {
   const { threadId } = req.params;
 
   const thread = await prisma.thread.findUnique({
@@ -618,10 +620,10 @@ app.delete("/api/v1/threads/:threadId", requireAuth, async (req: Request, res: R
   });
 
   return res.status(204).send();
-});
+}));
 
 // DELETE /api/v1/comments/:commentId (author can hide own comment)
-app.delete("/api/v1/comments/:commentId", requireAuth, async (req: Request, res: Response) => {
+app.delete("/api/v1/comments/:commentId", requireAuth, asyncHandler(async (req, res) => {
   const { commentId } = req.params;
 
   const comment = await prisma.comment.findUnique({
@@ -648,6 +650,14 @@ app.delete("/api/v1/comments/:commentId", requireAuth, async (req: Request, res:
   });
 
   return res.status(204).send();
+}));
+
+// Global error handler — catches any error passed via next(err) or thrown in asyncHandler
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[UNHANDLED ERROR]", err);
+  if (!res.headersSent) {
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 const port = Number(process.env.PORT ?? 8000);

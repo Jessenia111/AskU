@@ -12,7 +12,13 @@ function now() {
   return Date.now();
 }
 
-function getKey(req: Request, action: string) {
+function getKey(req: Request, action: string, byIp: boolean) {
+  if (byIp) {
+    // For unauthenticated endpoints (auth/request, auth/verify) use the client IP
+    // so different users don't share a single rate-limit bucket.
+    const ip = req.ip ?? req.socket?.remoteAddress ?? "unknown";
+    return `${action}:ip:${ip}`;
+  }
   const userId = req.user?.id ?? "anon";
   const courseId = req.params.courseId ?? "no-course";
   const targetId = (req.body?.targetId as string | undefined) ?? "no-target";
@@ -24,9 +30,14 @@ function cleanup(bucket: Bucket) {
   bucket.hits = bucket.hits.filter((t) => t > cutoff);
 }
 
-export function rateLimit(action: string, windowMs: number, max: number) {
+/**
+ * @param byIp – pass `true` for endpoints that run before auth (login/verify).
+ *               Uses req.ip so every visitor gets their own bucket instead of
+ *               all anonymous requests sharing one.
+ */
+export function rateLimit(action: string, windowMs: number, max: number, byIp = false) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const key = getKey(req, action);
+    const key = getKey(req, action, byIp);
 
     const bucket = buckets.get(key) ?? { windowMs, max, hits: [] };
     bucket.windowMs = windowMs;
