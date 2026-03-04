@@ -130,7 +130,7 @@ async function modAct(
   actionType: "HIDE" | "DELETE"
 ) {
   if (!hasMod.value) {
-    toast.push("error", "Missing MOD_KEY (open Moderation page and save it)");
+    toast.push("error", "Moderator access required.");
     return;
   }
 
