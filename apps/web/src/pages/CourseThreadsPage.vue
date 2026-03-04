@@ -140,9 +140,6 @@ onMounted(load);
             </button>
           </div>
 
-          <div class="text-sm text-slate-500">
-            Note: rate limit is enabled (3 threads/hour). If you spam, you'll get 429.
-          </div>
         </div>
       </div>
     </UiCard>

@@ -11,6 +11,7 @@ import cookieParser from "cookie-parser";
 import { attachAuth, requireAuth } from "./authMiddleware";
 import { generateCode6, isUtEmail, randomToken, SESSION_COOKIE, sha256 } from "./auth";
 import { sendVerificationCodeEmail, smtpConfigured } from "./mailer";
+import { generatePseudonymName } from "./nameGen";
 
 
 
@@ -298,11 +299,24 @@ app.post("/api/v1/threads/:threadId/comments",
   const thread = await prisma.thread.findUnique({ where: { id: threadId } });
   if (!thread || thread.isHidden) return res.status(404).json({ error: "Thread not found" });
 
-  // Need pseudonym in the same course as thread
-  const pseudonym = await prisma.pseudonym.findUnique({
+  // Need pseudonym in the same course as thread — auto-create if missing
+  let pseudonym = await prisma.pseudonym.findUnique({
     where: { userId_courseId: { userId: req.user.id, courseId: thread.courseId } },
   });
-  if (!pseudonym) return res.status(403).json({ error: "No pseudonym for this course" });
+
+  if (!pseudonym) {
+    let attempts = 0;
+    while (!pseudonym && attempts < 5) {
+      try {
+        pseudonym = await prisma.pseudonym.create({
+          data: { userId: req.user.id, courseId: thread.courseId, publicName: generatePseudonymName() },
+        });
+      } catch {
+        attempts++;
+      }
+    }
+    if (!pseudonym) return res.status(500).json({ error: "Could not generate pseudonym, please try again" });
+  }
 
   const comment = await prisma.comment.create({
     data: {

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 import UiCard from "../components/UiCard.vue";
 import ReportMenu from "../components/ReportMenu.vue";
+import ConfirmModal from "../components/ConfirmModal.vue";
 import { useToast } from "../composables/useToast";
 
 type ThreadDto = {
@@ -42,6 +43,8 @@ const lastReportKey = ref<string | null>(null);
 const lastReportAt = ref(0);
 
 const actingKey = ref<string | null>(null);
+
+const pendingDelete = ref<{ type: "thread"; id: string } | { type: "comment"; id: string } | null>(null);
 
 const modKey = computed(() => (localStorage.getItem("ASKU_MOD_KEY") ?? "").trim());
 const hasMod = computed(() => !!modKey.value);
@@ -155,31 +158,33 @@ async function modAct(
   }
 }
 
-async function deleteThreadAsAuthor() {
-  if (!thread.value) return;
-  if (!thread.value.isMine) return;
-
-  const t = thread.value;
-
-  try {
-    await apiFetch(`/api/v1/threads/${t.id}`, { method: "DELETE" });
-    toast.push("success", "Thread deleted");
-    await router.push(`/courses/${t.courseId}`);
-  } catch (e) {
-    toast.push("error", `Delete failed: ${String(e)}`);
-  }
+function confirmDeleteThread() {
+  if (!thread.value?.isMine) return;
+  pendingDelete.value = { type: "thread", id: thread.value.id };
 }
 
-async function deleteCommentAsAuthor(commentId: string) {
-  if (!thread.value) return;
+function confirmDeleteComment(commentId: string) {
+  const c = thread.value?.comments.find((x) => x.id === commentId);
+  if (!c?.isMine) return;
+  pendingDelete.value = { type: "comment", id: commentId };
+}
 
-  const c = thread.value.comments.find((x) => x.id === commentId);
-  if (!c || !c.isMine) return;
+async function executeDelete() {
+  const target = pendingDelete.value;
+  pendingDelete.value = null;
+  if (!target) return;
 
   try {
-    await apiFetch(`/api/v1/comments/${commentId}`, { method: "DELETE" });
-    toast.push("success", "Comment deleted");
-    await load();
+    if (target.type === "thread") {
+      const courseId = thread.value?.courseId;
+      await apiFetch(`/api/v1/threads/${target.id}`, { method: "DELETE" });
+      toast.push("success", "Thread deleted");
+      await router.push(`/courses/${courseId}`);
+    } else {
+      await apiFetch(`/api/v1/comments/${target.id}`, { method: "DELETE" });
+      toast.push("success", "Comment deleted");
+      await load();
+    }
   } catch (e) {
     toast.push("error", `Delete failed: ${String(e)}`);
   }
@@ -195,6 +200,18 @@ onMounted(load);
 
 <template>
   <div>
+    <ConfirmModal
+      v-if="pendingDelete"
+      :title="pendingDelete.type === 'thread' ? 'Delete thread?' : 'Delete comment?'"
+      :message="pendingDelete.type === 'thread'
+        ? 'This thread and all its comments will be hidden. This cannot be undone.'
+        : 'This comment will be hidden. This cannot be undone.'"
+      confirm-label="Delete"
+      :danger="true"
+      @confirm="executeDelete"
+      @cancel="pendingDelete = null"
+    />
+
     <div class="asku-subheader">
       <router-link class="asku-back" :to="backTo">← Back to Threads</router-link>
       <div class="asku-section-title">Thread</div>
@@ -227,9 +244,8 @@ onMounted(load);
 
             <button
               v-if="thread.isMine"
-              class="asku-btn"
-              :disabled="actingKey === `AUTHOR:DELETE:THREAD:${thread.id}`"
-              @click="deleteThreadAsAuthor"
+              class="asku-btn-danger"
+              @click="confirmDeleteThread"
             >
               Delete
             </button>
@@ -253,7 +269,7 @@ onMounted(load);
           </div>
 
           <div v-if="hasMod" class="text-xs text-slate-500 mt-2">
-            Moderator tools enabled (MOD_KEY найден в localStorage).
+            Moderator tools enabled.
           </div>
         </div>
       </UiCard>
@@ -288,8 +304,8 @@ onMounted(load);
 
                   <button
                     v-if="c.isMine"
-                    class="asku-btn"
-                    @click="deleteCommentAsAuthor(c.id)"
+                    class="asku-btn-danger"
+                    @click="confirmDeleteComment(c.id)"
                   >
                     Delete
                   </button>

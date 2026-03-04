@@ -35,9 +35,6 @@
         <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       </form>
 
-      <div class="mt-4 text-xs text-zinc-500">
-        Dev: verification code is printed in the API console.
-      </div>
     </div>
   </div>
 </template>

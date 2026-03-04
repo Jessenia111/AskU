@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "./prisma";
+import { generatePseudonymName } from "./nameGen";
 
 export async function devAuth(req: Request, _res: Response, next: NextFunction) {
   const utSubject = "dev-user-1";
@@ -12,9 +13,22 @@ export async function attachCoursePseudonym(req: Request, _res: Response, next: 
   const courseId = req.params.courseId;
   if (!req.user || !courseId) return next();
 
-  const pseudonym = await prisma.pseudonym.findUnique({
+  let pseudonym = await prisma.pseudonym.findUnique({
     where: { userId_courseId: { userId: req.user.id, courseId } },
   });
+
+  if (!pseudonym) {
+    let attempts = 0;
+    while (!pseudonym && attempts < 5) {
+      try {
+        pseudonym = await prisma.pseudonym.create({
+          data: { userId: req.user.id, courseId, publicName: generatePseudonymName() },
+        });
+      } catch {
+        attempts++;
+      }
+    }
+  }
 
   if (pseudonym) req.pseudonym = pseudonym;
   next();
