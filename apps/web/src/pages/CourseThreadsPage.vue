@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { apiFetch } from "../api/client";
+import { apiFetch, ApiError } from "../api/client";
 import UiCard from "../components/UiCard.vue";
 import ReportMenu from "../components/ReportMenu.vue";
 import { useToast } from "../composables/useToast";
@@ -16,12 +16,16 @@ type ThreadListItem = {
   createdAt: string;
 };
 
+type ThreadsPage = { items: ThreadListItem[]; total: number; skip: number; take: number };
+
 const route = useRoute();
 const courseId = computed(() => String(route.params.courseId));
 
 const toast = useToast();
 
 const threads = ref<ThreadListItem[]>([]);
+const total = ref(0);
+const loadingMore = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
@@ -36,6 +40,9 @@ const reportingKey = ref<string | null>(null);
 const lastReportKey = ref<string | null>(null);
 const lastReportAt = ref(0);
 
+const PAGE_SIZE = 20;
+const hasMore = computed(() => threads.value.length < total.value);
+
 function fmt(s: string) {
   return new Date(s).toLocaleString();
 }
@@ -44,16 +51,32 @@ async function load() {
   loading.value = true;
   error.value = null;
   try {
-    const [threadList, pseudonymData] = await Promise.all([
-      apiFetch<ThreadListItem[]>(`/api/v1/courses/${courseId.value}/threads`),
+    const [page, pseudonymData] = await Promise.all([
+      apiFetch<ThreadsPage>(`/api/v1/courses/${courseId.value}/threads?skip=0&take=${PAGE_SIZE}`),
       apiFetch<{ publicName: string | null }>(`/api/v1/courses/${courseId.value}/my-pseudonym`),
     ]);
-    threads.value = threadList;
+    threads.value = page.items;
+    total.value = page.total;
     myPseudonym.value = pseudonymData.publicName;
   } catch (e) {
-    error.value = String(e);
+    error.value = e instanceof ApiError ? e.message : String(e);
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadMore() {
+  loadingMore.value = true;
+  try {
+    const page = await apiFetch<ThreadsPage>(
+      `/api/v1/courses/${courseId.value}/threads?skip=${threads.value.length}&take=${PAGE_SIZE}`
+    );
+    threads.value.push(...page.items);
+    total.value = page.total;
+  } catch (e) {
+    toast.push("error", e instanceof ApiError ? e.message : String(e));
+  } finally {
+    loadingMore.value = false;
   }
 }
 
@@ -71,8 +94,9 @@ async function createThread() {
     toast.push("success", "Thread posted");
     await load();
   } catch (e) {
-    toast.push("error", `Failed to post thread: ${String(e)}`);
-    error.value = String(e);
+    const msg = e instanceof ApiError ? e.message : String(e);
+    toast.push("error", msg);
+    error.value = msg;
   } finally {
     submitting.value = false;
   }
@@ -95,16 +119,11 @@ async function submitReport(targetId: string, reason: "spam" | "abuse") {
   try {
     await apiFetch("/api/v1/reports", {
       method: "POST",
-      body: JSON.stringify({
-        targetType: "THREAD",
-        targetId,
-        reason: apiReason,
-      }),
+      body: JSON.stringify({ targetType: "THREAD", targetId, reason: apiReason }),
     });
-
     toast.push("success", `Report submitted: ${label}`);
   } catch (e) {
-    toast.push("error", `Report failed (${label}): ${String(e)}`);
+    toast.push("error", e instanceof ApiError ? e.message : `Report failed (${label})`);
   } finally {
     reportingKey.value = null;
   }
@@ -165,6 +184,14 @@ onMounted(load);
     <div v-if="error" class="asku-error mt-4">{{ error }}</div>
 
     <div v-if="!loading && !error" class="flex flex-col gap-6 mt-4">
+      <!-- Empty state -->
+      <div v-if="threads.length === 0" class="flex flex-col items-center gap-3 py-16 text-center">
+        <div class="text-4xl">💬</div>
+        <div class="text-lg font-semibold text-slate-700">No threads yet</div>
+        <div class="text-sm text-slate-400">Be the first to start a discussion in this course.</div>
+        <button class="asku-btn mt-2" @click="showNew = true">Post the first thread</button>
+      </div>
+
       <UiCard v-for="t in threads" :key="t.id">
         <div class="asku-card-pad">
           <div class="flex items-start justify-between gap-6">
@@ -191,8 +218,15 @@ onMounted(load);
         </div>
       </UiCard>
 
-      <div v-if="threads.length === 0" class="asku-muted">
-        No threads yet.
+      <!-- Load more -->
+      <div v-if="hasMore" class="flex justify-center pb-4">
+        <button
+          class="asku-btn-ghost"
+          :disabled="loadingMore"
+          @click="loadMore"
+        >
+          {{ loadingMore ? "Loading…" : `Load more (${total - threads.length} remaining)` }}
+        </button>
       </div>
     </div>
   </div>

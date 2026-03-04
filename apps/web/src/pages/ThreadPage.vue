@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { apiFetch } from "../api/client";
+import { apiFetch, ApiError } from "../api/client";
 import UiCard from "../components/UiCard.vue";
 import ReportMenu from "../components/ReportMenu.vue";
 import ConfirmModal from "../components/ConfirmModal.vue";
@@ -60,7 +60,7 @@ async function load() {
   try {
     thread.value = await apiFetch<ThreadDto>(`/api/v1/threads/${threadId.value}`);
   } catch (e) {
-    error.value = String(e);
+    error.value = e instanceof ApiError ? e.message : String(e);
     thread.value = null;
   } finally {
     loading.value = false;
@@ -83,7 +83,7 @@ async function postComment() {
     await load();
     window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50);
   } catch (e) {
-    toast.push("error", `Failed to post comment: ${String(e)}`);
+    toast.push("error", e instanceof ApiError ? e.message : "Failed to post comment");
   } finally {
     posting.value = false;
   }
@@ -118,7 +118,7 @@ async function submitReport(
     });
     toast.push("success", `Report submitted: ${label}`);
   } catch (e) {
-    toast.push("error", `Report failed (${label}): ${String(e)}`);
+    toast.push("error", e instanceof ApiError ? e.message : `Report failed (${label})`);
   } finally {
     reportingKey.value = null;
   }
@@ -152,7 +152,7 @@ async function modAct(
     toast.push("success", `${actionType} applied`);
     await load();
   } catch (e) {
-    toast.push("error", `Action failed: ${String(e)}`);
+    toast.push("error", e instanceof ApiError ? e.message : "Action failed");
   } finally {
     actingKey.value = null;
   }
@@ -186,7 +186,7 @@ async function executeDelete() {
       await load();
     }
   } catch (e) {
-    toast.push("error", `Delete failed: ${String(e)}`);
+    toast.push("error", e instanceof ApiError ? e.message : "Delete failed");
   }
 }
 

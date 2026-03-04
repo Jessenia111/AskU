@@ -44,6 +44,7 @@ function go(path: string) {
 
       <div v-if="open" class="asku-menu">
         <button class="asku-menu-item" @click="go('/courses')">Courses</button>
+        <button class="asku-menu-item" @click="go('/profile')">My Profile</button>
         <button class="asku-menu-item" @click="go('/moderation')">Moderation</button>
         <div class="asku-menu-sep"></div>
         <button class="asku-menu-item danger" @click="logout">Logout</button>

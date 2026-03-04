@@ -194,6 +194,24 @@ app.get("/api/v1/courses/:courseId/my-pseudonym", requireAuth, async (req: Reque
   res.json({ publicName: pseudonym?.publicName ?? null });
 });
 
+// GET /api/v1/me/pseudonyms — all pseudonyms for the logged-in user
+app.get("/api/v1/me/pseudonyms", requireAuth, async (req: Request, res: Response) => {
+  const pseudonyms = await prisma.pseudonym.findMany({
+    where: { userId: req.user!.id },
+    include: { course: { select: { id: true, code: true, title: true, semester: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(
+    pseudonyms.map((p) => ({
+      courseId: p.courseId,
+      courseCode: p.course.code,
+      courseTitle: p.course.title,
+      courseSemester: p.course.semester,
+      publicName: p.publicName,
+    }))
+  );
+});
+
 // GET /api/v1/courses
 app.get("/api/v1/courses", async (_req: Request, res: Response) => {
   const courses = await prisma.course.findMany({
@@ -207,15 +225,22 @@ app.get(
   "/api/v1/courses/:courseId/threads",
   async (req: Request, res: Response) => {
     const { courseId } = req.params;
+    const skip = Math.max(0, Number(req.query.skip ?? 0));
+    const take = Math.min(50, Math.max(1, Number(req.query.take ?? 20)));
 
-    const threads = await prisma.thread.findMany({
-      where: { courseId, isHidden: false },
-      orderBy: { createdAt: "desc" },
-      include: { author: { select: { publicName: true } } },
-    });
+    const [threads, total] = await Promise.all([
+      prisma.thread.findMany({
+        where: { courseId, isHidden: false },
+        orderBy: { createdAt: "desc" },
+        include: { author: { select: { publicName: true } } },
+        skip,
+        take,
+      }),
+      prisma.thread.count({ where: { courseId, isHidden: false } }),
+    ]);
 
-    res.json(
-      threads.map((t) => ({
+    res.json({
+      items: threads.map((t) => ({
         id: t.id,
         courseId: t.courseId,
         author: { publicName: t.author.publicName },
@@ -223,8 +248,11 @@ app.get(
         bodyPreview: t.body.slice(0, 200),
         status: t.status,
         createdAt: t.createdAt,
-      }))
-    );
+      })),
+      total,
+      skip,
+      take,
+    });
   }
 );
 
