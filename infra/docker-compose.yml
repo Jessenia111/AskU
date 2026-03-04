@@ -1,16 +1,64 @@
 services:
+
+  # ── PostgreSQL database ──────────────────────────────────────────────────────
   db:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: asku_db
     restart: unless-stopped
     environment:
       POSTGRES_DB: asku
       POSTGRES_USER: asku
-      POSTGRES_PASSWORD: asku
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-asku}
     ports:
-      - "5433:5432"
+      - "5433:5432"          # host:container — use 5433 to avoid clashing with a local Postgres
     volumes:
       - asku_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U asku"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Node.js / Express API ────────────────────────────────────────────────────
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: asku_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy    # wait for Postgres to be ready
+    environment:
+      DATABASE_URL: postgresql://asku:${DB_PASSWORD:-asku}@db:5432/asku
+      NODE_ENV: production
+      PORT: 8000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      COOKIE_SECURE: "true"
+      MOD_KEY: ${MOD_KEY:?MOD_KEY must be set in .env}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@asku.ut.ee}
+    ports:
+      - "8000:8000"
+
+  # ── Vue 3 frontend served by nginx ──────────────────────────────────────────
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      args:
+        # Vite bakes this URL into the JS bundle at build time.
+        # In production, set VITE_API_BASE to your public API domain.
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+    container_name: asku_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
 
 volumes:
   asku_pg:

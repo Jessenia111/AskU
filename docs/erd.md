@@ -1,108 +1,173 @@
-# AskU — ERD (MVP)
+# AskU — Entity Relationship Diagram
 
-## Entities (tables)
+The diagram below shows all database tables and their relationships.  
+Generated from `apps/api/prisma/schema.prisma`.
 
-### users
-Purpose: internal UT-authenticated identity (not public)
-- id (uuid, pk)
-- ut_subject (string, unique)  // OIDC "sub"
-- email (string, nullable)
-- created_at (timestamp)
+```mermaid
+erDiagram
 
-### roles
-Purpose: RBAC roles
-- id (uuid, pk)
-- name (string, unique) // STUDENT, STAFF, MODERATOR, ADMIN
+    User {
+        uuid    id              PK
+        string  email           UK
+        string  utSubject       UK  "placeholder for future UT SSO"
+        datetime emailVerifiedAt
+        datetime createdAt
+        datetime updatedAt
+    }
 
-### user_roles
-Purpose: assign roles to users (global)
-- user_id (uuid, fk -> users.id)
-- role_id (uuid, fk -> roles.id)
-- (pk: user_id, role_id)
+    Session {
+        uuid    id          PK
+        uuid    userId      FK
+        string  tokenHash   UK  "SHA-256 of the session cookie value"
+        datetime expiresAt
+        datetime createdAt
+    }
 
-### courses
-Purpose: course space / context
-- id (uuid, pk)
-- code (string) // e.g. LTAT.05.006
-- title (string)
-- semester (string) // e.g. 2025F
-- created_at (timestamp)
+    AuthCode {
+        uuid    id          PK
+        string  email
+        string  codeHash        "SHA-256 of the 6-digit OTP"
+        datetime expiresAt      "10 minutes from creation"
+        int     attempts        "incremented on wrong code; max 5"
+        datetime createdAt
+    }
 
-### enrollments
-Purpose: which users belong to which courses
-- user_id (uuid, fk -> users.id)
-- course_id (uuid, fk -> courses.id)
-- enrollment_role (string) // STUDENT or STAFF (optional)
-- (pk: user_id, course_id)
+    Role {
+        uuid    id      PK
+        enum    name    UK  "STUDENT | STAFF | MODERATOR | ADMIN"
+    }
 
-### pseudonyms
-Purpose: stable pseudonym per user per course (public identity)
-- id (uuid, pk)
-- user_id (uuid, fk -> users.id)
-- course_id (uuid, fk -> courses.id)
-- public_name (string) // "Anonymous #123"
-- created_at (timestamp)
-- unique(user_id, course_id)
-- unique(course_id, public_name)
+    UserRole {
+        uuid    userId  FK
+        uuid    roleId  FK
+    }
 
-### threads
-Purpose: questions/posts
-- id (uuid, pk)
-- course_id (uuid, fk -> courses.id)
-- author_pseudonym_id (uuid, fk -> pseudonyms.id)
-- title (string)
-- body (text)
-- status (string) // OPEN, ANSWERED, CLOSED (optional MVP)
-- is_hidden (bool, default false)
-- created_at (timestamp)
+    Course {
+        uuid    id          PK
+        string  code            "e.g. LTAT.00.001"
+        string  title
+        string  semester        "e.g. 2024/2025 Spring"
+        datetime createdAt
+    }
 
-### comments
-Purpose: answers/comments in a thread
-- id (uuid, pk)
-- thread_id (uuid, fk -> threads.id)
-- author_pseudonym_id (uuid, fk -> pseudonyms.id)
-- body (text)
-- is_hidden (bool, default false)
-- created_at (timestamp)
+    Enrollment {
+        uuid        userId          FK
+        uuid        courseId        FK
+        enum        enrollmentRole      "STUDENT | STAFF (optional)"
+    }
 
-### reports
-Purpose: user reports on content
-- id (uuid, pk)
-- reporter_pseudonym_id (uuid, fk -> pseudonyms.id)
-- target_type (string) // THREAD or COMMENT
-- target_id (uuid) // points to threads.id or comments.id
-- reason (string) // SPAM, HARASSMENT, etc.
-- details (text, nullable)
-- status (string) // OPEN, REVIEWED, RESOLVED
-- created_at (timestamp)
+    Pseudonym {
+        uuid    id          PK
+        uuid    userId      FK
+        uuid    courseId    FK
+        string  publicName      "e.g. SwiftOwl342 — unique per course"
+        datetime createdAt
+    }
 
-### moderation_actions
-Purpose: actions taken by moderators/admins
-- id (uuid, pk)
-- report_id (uuid, fk -> reports.id, nullable)
-- moderator_user_id (uuid, fk -> users.id)
-- action_type (string) // HIDE, DELETE, WARN, MUTE (MVP: HIDE/DELETE)
-- target_type (string) // THREAD or COMMENT
-- target_id (uuid)
-- note (text, nullable)
-- created_at (timestamp)
+    Thread {
+        uuid    id                  PK
+        uuid    courseId            FK
+        uuid    authorPseudonymId   FK
+        string  title
+        string  body
+        string  status              "OPEN (default)"
+        bool    isHidden            "soft-delete flag"
+        datetime createdAt
+    }
 
-### audit_log
-Purpose: immutable log of sensitive operations (minimum)
-- id (uuid, pk)
-- actor_user_id (uuid, fk -> users.id)
-- event_type (string) // MOD_ACTION, DEANON_REQUEST, DEANON_RESULT, LOGIN, etc.
-- entity_type (string, nullable) // THREAD/COMMENT/REPORT
-- entity_id (uuid, nullable)
-- metadata_json (json, nullable)
-- created_at (timestamp)
+    Comment {
+        uuid    id                  PK
+        uuid    threadId            FK
+        uuid    authorPseudonymId   FK
+        string  body
+        bool    isHidden            "soft-delete flag"
+        datetime createdAt
+    }
 
-## Relationships (high level)
-- users 1..* enrollments *..1 courses
-- users 1..* pseudonyms *..1 courses (course-scoped)
-- pseudonyms 1..* threads (author_pseudonym_id)
-- pseudonyms 1..* comments (author_pseudonym_id)
-- pseudonyms 1..* reports (reporter_pseudonym_id)
-- reports 0..* moderation_actions (optional link via report_id)
-- users 1..* moderation_actions (moderator_user_id)
-- users 1..* audit_log (actor_user_id)
+    Report {
+        uuid        id                  PK
+        uuid        reporterPseudonymId FK
+        enum        targetType          "THREAD | COMMENT"
+        uuid        targetId            "ID of the reported Thread or Comment"
+        string      reason              "SPAM | ABUSE"
+        string      details             "optional free text"
+        enum        status              "OPEN | REVIEWED | RESOLVED"
+        datetime    createdAt
+    }
+
+    ModerationAction {
+        uuid    id              PK
+        uuid    reportId        FK  "optional — action can be taken without a report"
+        uuid    moderatorUserId FK
+        enum    actionType      "HIDE | DELETE"
+        enum    targetType      "THREAD | COMMENT"
+        uuid    targetId
+        string  note            "optional moderator note"
+        datetime createdAt
+    }
+
+    AuditLog {
+        uuid    id          PK
+        uuid    actorUserId FK
+        string  eventType       "REPORT_CREATED | MOD_ACTION | THREAD_HIDDEN_BY_AUTHOR | ..."
+        string  entityType      "THREAD | COMMENT"
+        uuid    entityId
+        json    metadataJson    "additional context"
+        datetime createdAt
+    }
+
+    %% ── Relationships ──────────────────────────────────────────────────────────
+
+    User         ||--o{ Session          : "has"
+    User         ||--o{ UserRole         : "has"
+    User         ||--o{ Pseudonym        : "has"
+    User         ||--o{ Enrollment       : "has"
+    User         ||--o{ ModerationAction : "performs"
+    User         ||--o{ AuditLog         : "generates"
+
+    Role         ||--o{ UserRole         : "assigned via"
+
+    Course       ||--o{ Enrollment       : "has"
+    Course       ||--o{ Pseudonym        : "has"
+    Course       ||--o{ Thread           : "contains"
+
+    Pseudonym    ||--o{ Thread           : "authors"
+    Pseudonym    ||--o{ Comment          : "authors"
+    Pseudonym    ||--o{ Report           : "files"
+
+    Thread       ||--o{ Comment          : "has"
+
+    Report       ||--o{ ModerationAction : "resolved by"
+```
+
+---
+
+## Key design decisions
+
+### Pseudonym as the privacy boundary
+
+The `Pseudonym` table is the core privacy mechanism. It acts as a proxy identity: a user's real `userId` is never stored on `Thread` or `Comment` — only their `authorPseudonymId`. This means:
+
+- The API can return author display names (`publicName`) without ever leaking `userId` or `email`.
+- A single user can participate in multiple courses under different pseudonyms, making cross-course linking impossible for other users.
+- Moderators can act on content without seeing who the real author is.
+
+### Polymorphic `targetId` in Report and ModerationAction
+
+Both `Report.targetId` and `ModerationAction.targetId` are plain UUIDs paired with a `targetType` enum (`THREAD | COMMENT`). This is a deliberate simplification for the MVP — it avoids two separate foreign-key relations and keeps the schema flat.
+
+The trade-off is that the database cannot enforce referential integrity on `targetId`. For the thesis scope this is acceptable, but a production system would use separate nullable foreign keys (`threadId`, `commentId`) or a polymorphic association pattern.
+
+### Soft-delete vs hard-delete
+
+`Thread.isHidden` and `Comment.isHidden` implement soft deletion. When a thread or comment is hidden by its author or a moderator, the row stays in the database so that:
+
+- Audit logs remain consistent (they reference the entity ID).
+- The content can potentially be restored by an admin.
+- Statistics (report counts, etc.) remain accurate.
+
+Moderator DELETE actions (`ModActionType.DELETE`) do perform a hard delete for the MVP. This will need revisiting before production.
+
+### Session security
+
+Sessions are implemented with a random 32-byte token stored in an `httpOnly` cookie (`SameSite=Lax`). Only the SHA-256 hash of the token is stored in the database. If the database were compromised, the attacker would still not have valid session tokens.
