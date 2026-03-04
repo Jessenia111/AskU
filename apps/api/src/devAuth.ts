@@ -1,19 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "./prisma";
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: { id: string; utSubject: string };
-      pseudonym?: { id: string; publicName: string; courseId: string };
-    }
-  }
-}
-
 export async function devAuth(req: Request, _res: Response, next: NextFunction) {
   const utSubject = "dev-user-1";
   const user = await prisma.user.findUnique({ where: { utSubject } });
-  if (user) req.user = { id: user.id, utSubject: user.utSubject };
+  if (user) req.user = { id: user.id, email: user.email };
   next();
 }
 
@@ -25,7 +16,7 @@ export async function attachCoursePseudonym(req: Request, _res: Response, next: 
     where: { userId_courseId: { userId: req.user.id, courseId } },
   });
 
-  if (pseudonym) req.pseudonym = { id: pseudonym.id, publicName: pseudonym.publicName, courseId };
+  if (pseudonym) req.pseudonym = pseudonym;
   next();
 }
 

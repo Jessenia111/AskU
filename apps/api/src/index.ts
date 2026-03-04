@@ -68,11 +68,19 @@ app.post(
     },
   });
 
-  // after you created authCode in DB
-
- if (process.env.NODE_ENV !== "production") {
-   console.log(`[AUTH DEV] Code for ${email}: ${code}`);
- }
+  if (smtpConfigured()) {
+    try {
+      await sendVerificationCodeEmail(email, code);
+    } catch (err) {
+      console.error("[AUTH] Failed to send verification email:", err);
+      return res.status(500).json({ error: "Failed to send verification email. Please try again." });
+    }
+  } else if (process.env.NODE_ENV !== "production") {
+    console.log(`[AUTH DEV] Code for ${email}: ${code}`);
+  } else {
+    console.error("[AUTH] SMTP is not configured in production!");
+    return res.status(500).json({ error: "Email service is not configured." });
+  }
 
   res.json({ ok: true });
 });
@@ -375,7 +383,7 @@ app.post(
 );
 
 // GET /api/v1/moderation/reports
-app.get("/api/v1/moderation/reports", requireModerator, async (_req: Request, res: Response) => {
+app.get("/api/v1/moderation/reports", requireAuth, requireModerator, async (_req: Request, res: Response) => {
   const reports = await prisma.report.findMany({
     where: { status: "OPEN" },
     orderBy: { createdAt: "desc" },
@@ -400,7 +408,7 @@ app.get("/api/v1/moderation/reports", requireModerator, async (_req: Request, re
 
 
 // POST /api/v1/moderation/actions
-app.post("/api/v1/moderation/actions", requireModerator, async (req: Request, res: Response) => {
+app.post("/api/v1/moderation/actions", requireAuth, requireModerator, async (req: Request, res: Response) => {
   const bodySchema = z.object({
     reportId: z.string().uuid().optional(),
     actionType: z.enum(["HIDE", "DELETE"]),
@@ -414,10 +422,7 @@ app.post("/api/v1/moderation/actions", requireModerator, async (req: Request, re
     return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
   }
 
-  // In dev mode we don't have real moderator user, so we use dev-user-1 as actor
-  // (Later: actor is derived from UT SSO + roles)
-  const actor = await prisma.user.findUnique({ where: { utSubject: "dev-user-1" } });
-  if (!actor) return res.status(500).json({ error: "Dev actor missing" });
+  const actorId = req.user!.id;
 
   // Apply action to content
   if (parsed.data.targetType === "THREAD") {
@@ -437,7 +442,7 @@ app.post("/api/v1/moderation/actions", requireModerator, async (req: Request, re
   const action = await prisma.moderationAction.create({
     data: {
       reportId: parsed.data.reportId,
-      moderatorUserId: actor.id,
+      moderatorUserId: actorId,
       actionType: parsed.data.actionType as ModActionType,
       targetType: parsed.data.targetType as ContentType,
       targetId: parsed.data.targetId,
@@ -454,7 +459,7 @@ app.post("/api/v1/moderation/actions", requireModerator, async (req: Request, re
 
   await prisma.auditLog.create({
     data: {
-      actorUserId: actor.id,
+      actorUserId: actorId,
       eventType: "MOD_ACTION",
       entityType: parsed.data.targetType,
       entityId: parsed.data.targetId,

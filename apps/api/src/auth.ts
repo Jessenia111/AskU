@@ -7,7 +7,7 @@ export function isUtEmail(email: string) {
 }
 
 export function generateCode6() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 export function sha256(input: string) {
