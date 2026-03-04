@@ -242,25 +242,27 @@ onMounted(load);
               @select="(reason) => submitReport('THREAD', thread.id, reason)"
             />
 
+            <!-- Author delete — only shown when no mod tools available -->
             <button
-              v-if="thread.isMine"
-              class="asku-btn-danger"
+              v-if="thread.isMine && !hasMod"
+              class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500"
               @click="confirmDeleteThread"
             >
               Delete
             </button>
 
+            <!-- Mod tools — hide author delete to avoid duplication -->
             <template v-if="hasMod">
               <button
-                class="asku-btn-ghost"
-                :disabled="actingKey === `HIDE:THREAD:${thread.id}`"
+                class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                :disabled="!!actingKey"
                 @click="modAct('THREAD', thread.id, 'HIDE')"
               >
                 {{ actingKey === `HIDE:THREAD:${thread.id}` ? "Working..." : "Hide" }}
               </button>
               <button
-                class="asku-btn"
-                :disabled="actingKey === `DELETE:THREAD:${thread.id}`"
+                class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500 disabled:opacity-60"
+                :disabled="!!actingKey"
                 @click="modAct('THREAD', thread.id, 'DELETE')"
               >
                 {{ actingKey === `DELETE:THREAD:${thread.id}` ? "Working..." : "Delete" }}
@@ -302,25 +304,27 @@ onMounted(load);
                     @select="(reason) => submitReport('COMMENT', c.id, reason)"
                   />
 
+                  <!-- Author delete — only when no mod tools -->
                   <button
-                    v-if="c.isMine"
-                    class="asku-btn-danger"
+                    v-if="c.isMine && !hasMod"
+                    class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500"
                     @click="confirmDeleteComment(c.id)"
                   >
                     Delete
                   </button>
 
+                  <!-- Mod tools -->
                   <template v-if="hasMod">
                     <button
-                      class="asku-btn-ghost"
-                      :disabled="actingKey === `HIDE:COMMENT:${c.id}`"
+                      class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      :disabled="!!actingKey"
                       @click="modAct('COMMENT', c.id, 'HIDE')"
                     >
                       {{ actingKey === `HIDE:COMMENT:${c.id}` ? "Working..." : "Hide" }}
                     </button>
                     <button
-                      class="asku-btn"
-                      :disabled="actingKey === `DELETE:COMMENT:${c.id}`"
+                      class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500 disabled:opacity-60"
+                      :disabled="!!actingKey"
                       @click="modAct('COMMENT', c.id, 'DELETE')"
                     >
                       {{ actingKey === `DELETE:COMMENT:${c.id}` ? "Working..." : "Delete" }}

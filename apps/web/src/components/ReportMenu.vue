@@ -25,8 +25,12 @@ function toggle() {
 
 <template>
   <div class="report-wrap">
-    <button class="asku-btn-ghost" :disabled="disabled" @click="toggle">
-      {{ disabled ? "Reporting..." : "Report" }} <span style="opacity:.7">▼</span>
+    <button
+      class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+      :disabled="disabled"
+      @click="toggle"
+    >
+      {{ disabled ? "Reporting..." : "Report" }} <span class="ml-1 opacity-60">▼</span>
     </button>
 
     <div v-if="open" class="report-menu">

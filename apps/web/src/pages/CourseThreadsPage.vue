@@ -25,6 +25,8 @@ const threads = ref<ThreadListItem[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
+const myPseudonym = ref<string | null>(null);
+
 const showNew = ref(false);
 const title = ref("");
 const body = ref("");
@@ -42,9 +44,12 @@ async function load() {
   loading.value = true;
   error.value = null;
   try {
-    threads.value = await apiFetch<ThreadListItem[]>(
-      `/api/v1/courses/${courseId.value}/threads`
-    );
+    const [threadList, pseudonymData] = await Promise.all([
+      apiFetch<ThreadListItem[]>(`/api/v1/courses/${courseId.value}/threads`),
+      apiFetch<{ publicName: string | null }>(`/api/v1/courses/${courseId.value}/my-pseudonym`),
+    ]);
+    threads.value = threadList;
+    myPseudonym.value = pseudonymData.publicName;
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -113,6 +118,12 @@ onMounted(load);
     <div class="asku-subheader">
       <router-link class="asku-back" to="/courses">← Courses</router-link>
       <div class="asku-section-title">Threads</div>
+      <div v-if="myPseudonym" class="ml-auto flex items-center gap-2 text-sm text-slate-500">
+        You are
+        <span class="rounded-lg bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700">
+          {{ myPseudonym }}
+        </span>
+      </div>
     </div>
 
     <button class="asku-link-action" @click="showNew = !showNew">
@@ -121,7 +132,13 @@ onMounted(load);
 
     <UiCard v-if="showNew" :topbar="false">
       <div class="asku-card-pad">
-        <div class="text-2xl font-semibold mb-4">Post New Thread</div>
+        <div class="flex items-center justify-between mb-4">
+          <div class="text-2xl font-semibold">Post New Thread</div>
+          <div v-if="myPseudonym" class="text-sm text-slate-500">
+            Posting as
+            <span class="font-semibold text-blue-700">{{ myPseudonym }}</span>
+          </div>
+        </div>
 
         <div class="flex flex-col gap-3">
           <input v-model="title" class="asku-input" placeholder="Title" />

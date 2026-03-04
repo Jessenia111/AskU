@@ -175,6 +175,15 @@ app.post("/api/v1/auth/logout", requireAuth, async (req: Request, res: Response)
 
 
 
+// GET /api/v1/courses/:courseId/my-pseudonym — returns current user's pseudonym for a course
+app.get("/api/v1/courses/:courseId/my-pseudonym", requireAuth, async (req: Request, res: Response) => {
+  const { courseId } = req.params;
+  const pseudonym = await prisma.pseudonym.findUnique({
+    where: { userId_courseId: { userId: req.user!.id, courseId } },
+  });
+  res.json({ publicName: pseudonym?.publicName ?? null });
+});
+
 // GET /api/v1/courses
 app.get("/api/v1/courses", async (_req: Request, res: Response) => {
   const courses = await prisma.course.findMany({
@@ -406,17 +415,49 @@ app.get("/api/v1/moderation/reports", requireAuth, requireModerator, async (_req
     },
   });
 
+  // Batch-fetch content for all reported threads and comments
+  const threadIds = reports.filter((r) => r.targetType === "THREAD").map((r) => r.targetId);
+  const commentIds = reports.filter((r) => r.targetType === "COMMENT").map((r) => r.targetId);
+  const courseIds = [...new Set(reports.map((r) => r.reporter.courseId))];
+
+  const [threads, comments, courses] = await Promise.all([
+    prisma.thread.findMany({ where: { id: { in: threadIds } }, select: { id: true, title: true, body: true } }),
+    prisma.comment.findMany({ where: { id: { in: commentIds } }, select: { id: true, body: true } }),
+    prisma.course.findMany({ where: { id: { in: courseIds } }, select: { id: true, code: true, title: true } }),
+  ]);
+
+  const threadMap = new Map(threads.map((t) => [t.id, t]));
+  const commentMap = new Map(comments.map((c) => [c.id, c]));
+  const courseMap = new Map(courses.map((c) => [c.id, c]));
+
   res.json(
-    reports.map((r) => ({
-      id: r.id,
-      createdAt: r.createdAt,
-      reporter: { publicName: r.reporter.publicName },
-      courseId: r.reporter.courseId,
-      targetType: r.targetType,
-      targetId: r.targetId,
-      reason: r.reason,
-      status: r.status,
-    }))
+    reports.map((r) => {
+      const course = courseMap.get(r.reporter.courseId);
+      let contentTitle: string | null = null;
+      let contentPreview: string | null = null;
+
+      if (r.targetType === "THREAD") {
+        const t = threadMap.get(r.targetId);
+        contentTitle = t?.title ?? "[deleted]";
+        contentPreview = t ? t.body.slice(0, 300) : null;
+      } else {
+        const c = commentMap.get(r.targetId);
+        contentPreview = c ? c.body.slice(0, 300) : "[deleted]";
+      }
+
+      return {
+        id: r.id,
+        createdAt: r.createdAt,
+        reporter: { publicName: r.reporter.publicName },
+        course: course ? { id: course.id, code: course.code, title: course.title } : null,
+        targetType: r.targetType,
+        targetId: r.targetId,
+        reason: r.reason,
+        status: r.status,
+        contentTitle,
+        contentPreview,
+      };
+    })
   );
 });
 
@@ -482,6 +523,33 @@ app.post("/api/v1/moderation/actions", requireAuth, requireModerator, async (req
   });
 
   res.status(201).json({ id: action.id });
+});
+
+// POST /api/v1/moderation/dismiss — close a report without taking action on content
+app.post("/api/v1/moderation/dismiss", requireAuth, requireModerator, async (req: Request, res: Response) => {
+  const bodySchema = z.object({ reportId: z.string().uuid() });
+  const parsed = bodySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
+
+  const report = await prisma.report.findUnique({ where: { id: parsed.data.reportId } });
+  if (!report) return res.status(404).json({ error: "Report not found" });
+
+  await prisma.report.update({
+    where: { id: parsed.data.reportId },
+    data: { status: "REVIEWED" },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: req.user!.id,
+      eventType: "MOD_DISMISS",
+      entityType: report.targetType,
+      entityId: report.targetId,
+      metadataJson: { reportId: parsed.data.reportId },
+    },
+  });
+
+  res.json({ ok: true });
 });
 
 // DELETE /api/v1/threads/:threadId (author can hide own thread)
