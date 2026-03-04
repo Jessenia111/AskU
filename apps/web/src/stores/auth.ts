@@ -13,7 +13,7 @@ export const useAuthStore = defineStore("auth", () => {
   const isModerator = computed(() => user.value?.isModerator ?? false);
   const initials = computed(() => {
     if (!user.value?.email) return "U";
-    return user.value.email[0].toUpperCase();
+    return user.value.email.charAt(0).toUpperCase();
   });
 
   async function fetchMe(): Promise<boolean> {

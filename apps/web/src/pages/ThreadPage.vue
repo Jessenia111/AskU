@@ -239,7 +239,7 @@ onMounted(load);
           <div class="flex items-center justify-end gap-2 mt-6">
             <ReportMenu
               :disabled="(reportingKey?.startsWith(`THREAD:${thread.id}:`) ?? false)"
-              @select="(reason) => submitReport('THREAD', thread.id, reason)"
+              @select="(reason) => submitReport('THREAD', thread!.id, reason)"
             />
 
             <!-- Author delete — only shown when no mod tools available -->
