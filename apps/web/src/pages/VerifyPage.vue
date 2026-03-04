@@ -49,9 +49,6 @@
         </button>
       </div>
 
-      <div class="text-xs text-zinc-500 mt-6">
-        Dev: verification code is printed in the API console.
-      </div>
     </div>
   </div>
 </template>
@@ -60,8 +57,10 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
+import { useAuthStore } from "../stores/auth";
 
 const router = useRouter();
+const auth = useAuthStore();
 
 const email = ref("");
 const code = ref("");
@@ -116,6 +115,7 @@ async function onSubmit() {
     });
 
     sessionStorage.removeItem("asku_auth_email");
+    await auth.refresh(); // reset cache so router re-fetches with new session
     router.push("/courses");
   } catch (e) {
     error.value = String(e);

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import UiCard from "../components/UiCard.vue";
 import { apiFetch } from "../api/client";
 import { useToast } from "../composables/useToast";
+import { useAuthStore } from "../stores/auth";
 
 type ReportItem = {
   id: string;
@@ -18,14 +19,11 @@ type ReportItem = {
 };
 
 const toast = useToast();
-
-const keyInput = ref(localStorage.getItem("ASKU_MOD_KEY") ?? "");
-const modKey = computed(() => keyInput.value.trim());
+const auth = useAuthStore();
 
 const loading = ref(false);
 const error = ref<string | null>(null);
 const reports = ref<ReportItem[]>([]);
-
 const actingId = ref<string | null>(null);
 
 function fmt(s: string) {
@@ -38,24 +36,11 @@ function labelReason(r: string) {
   return r;
 }
 
-function saveKey() {
-  localStorage.setItem("ASKU_MOD_KEY", keyInput.value.trim());
-  toast.push("success", "Moderator key saved");
-}
-
 async function load() {
-  if (!modKey.value) {
-    reports.value = [];
-    error.value = "Enter MOD_KEY first.";
-    return;
-  }
-
   loading.value = true;
   error.value = null;
   try {
-    reports.value = await apiFetch<ReportItem[]>("/api/v1/moderation/reports", {
-      headers: { "x-mod-key": modKey.value },
-    });
+    reports.value = await apiFetch<ReportItem[]>("/api/v1/moderation/reports");
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -64,13 +49,11 @@ async function load() {
 }
 
 async function act(report: ReportItem, actionType: "HIDE" | "DELETE") {
-  if (!modKey.value) { toast.push("error", "Missing MOD_KEY"); return; }
   if (actingId.value) return;
   actingId.value = report.id;
   try {
     await apiFetch("/api/v1/moderation/actions", {
       method: "POST",
-      headers: { "x-mod-key": modKey.value },
       body: JSON.stringify({
         reportId: report.id,
         actionType,
@@ -89,13 +72,11 @@ async function act(report: ReportItem, actionType: "HIDE" | "DELETE") {
 }
 
 async function dismiss(report: ReportItem) {
-  if (!modKey.value) { toast.push("error", "Missing MOD_KEY"); return; }
   if (actingId.value) return;
   actingId.value = report.id;
   try {
     await apiFetch("/api/v1/moderation/dismiss", {
       method: "POST",
-      headers: { "x-mod-key": modKey.value },
       body: JSON.stringify({ reportId: report.id }),
     });
     toast.push("info", "Report dismissed");
@@ -108,7 +89,7 @@ async function dismiss(report: ReportItem) {
 }
 
 onMounted(() => {
-  if (modKey.value) load();
+  if (auth.isModerator) load();
 });
 </script>
 
@@ -119,102 +100,98 @@ onMounted(() => {
       <div class="asku-section-title">Moderation</div>
     </div>
 
-    <UiCard :topbar="false">
-      <div class="asku-card-pad">
-        <div class="text-xl font-semibold mb-2">Moderator access</div>
-        <div class="text-sm text-slate-500 mb-4">
-          Enter MOD_KEY (from API .env). Stored locally in your browser.
-        </div>
-        <div class="flex gap-3 items-center">
-          <input v-model="keyInput" class="asku-input" placeholder="MOD_KEY" type="password" />
-          <button class="asku-btn" :disabled="!modKey" @click="saveKey">Save</button>
-          <button class="asku-btn-ghost" :disabled="!modKey" @click="load">Load reports</button>
-        </div>
-        <div v-if="error" class="asku-error mt-4">{{ error }}</div>
-      </div>
-    </UiCard>
-
-    <div v-if="loading" class="asku-muted mt-4">Loading…</div>
-
-    <div v-if="!loading && reports.length === 0 && !error" class="asku-muted mt-4">
-      No open reports.
-    </div>
-
-    <div v-if="!loading && reports.length > 0" class="flex flex-col gap-4 mt-4">
-      <div class="text-sm text-slate-500 font-medium">
-        {{ reports.length }} open {{ reports.length === 1 ? 'report' : 'reports' }}
-      </div>
-
-      <UiCard v-for="r in reports" :key="r.id">
-        <div class="asku-card-pad">
-
-          <!-- Header row -->
-          <div class="flex items-start justify-between gap-6">
-            <div class="flex items-center gap-2">
-              <span
-                class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold"
-                :class="r.reason === 'SPAM'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-red-100 text-red-800'"
-              >
-                {{ labelReason(r.reason) }}
-              </span>
-              <span class="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                {{ r.targetType }}
-              </span>
-            </div>
-            <div class="asku-date shrink-0">{{ fmt(r.createdAt) }}</div>
+    <!-- Not a moderator -->
+    <div v-if="!auth.isModerator">
+      <UiCard :topbar="false">
+        <div class="asku-card-pad text-center py-8">
+          <div class="text-4xl mb-3">🔒</div>
+          <div class="text-lg font-semibold text-slate-700">Access restricted</div>
+          <div class="text-sm text-slate-500 mt-2">
+            You need the Moderator role to access this panel.
           </div>
-
-          <!-- Course info -->
-          <div class="mt-2 text-sm text-slate-500">
-            <span v-if="r.course">
-              Course: <span class="font-medium text-slate-700">{{ r.course.code }} — {{ r.course.title }}</span>
-            </span>
-            <span v-else>Course: unknown</span>
-            &nbsp;·&nbsp; Reported by: <span class="font-medium text-slate-700">{{ r.reporter.publicName }}</span>
-          </div>
-
-          <!-- Reported content -->
-          <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <div v-if="r.contentTitle" class="font-semibold text-slate-800 mb-1">
-              {{ r.contentTitle }}
-            </div>
-            <div v-if="r.contentPreview" class="text-sm text-slate-700 leading-relaxed">
-              {{ r.contentPreview }}
-            </div>
-            <div v-else class="text-sm text-slate-400 italic">
-              Content no longer available.
-            </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="flex justify-end gap-2 mt-4">
-            <button
-              class="asku-btn-ghost text-sm"
-              :disabled="actingId === r.id"
-              @click="dismiss(r)"
-            >
-              Dismiss
-            </button>
-            <button
-              class="asku-btn-ghost text-sm"
-              :disabled="actingId === r.id"
-              @click="act(r, 'HIDE')"
-            >
-              {{ actingId === r.id ? "Working..." : "Hide" }}
-            </button>
-            <button
-              class="asku-btn-danger text-sm"
-              :disabled="actingId === r.id"
-              @click="act(r, 'DELETE')"
-            >
-              {{ actingId === r.id ? "Working..." : "Delete" }}
-            </button>
-          </div>
-
         </div>
       </UiCard>
+    </div>
+
+    <!-- Moderator view -->
+    <div v-else>
+      <div v-if="loading" class="asku-muted mt-4">Loading…</div>
+      <div v-if="error" class="asku-error mt-4">{{ error }}</div>
+
+      <div v-if="!loading && !error && reports.length === 0" class="asku-muted mt-4">
+        No open reports.
+      </div>
+
+      <div v-if="!loading && reports.length > 0" class="flex flex-col gap-4 mt-4">
+        <div class="text-sm text-slate-500 font-medium">
+          {{ reports.length }} open {{ reports.length === 1 ? 'report' : 'reports' }}
+        </div>
+
+        <UiCard v-for="r in reports" :key="r.id">
+          <div class="asku-card-pad">
+
+            <div class="flex items-start justify-between gap-6">
+              <div class="flex items-center gap-2">
+                <span
+                  class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold"
+                  :class="r.reason === 'SPAM' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'"
+                >
+                  {{ labelReason(r.reason) }}
+                </span>
+                <span class="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                  {{ r.targetType }}
+                </span>
+              </div>
+              <div class="asku-date shrink-0">{{ fmt(r.createdAt) }}</div>
+            </div>
+
+            <div class="mt-2 text-sm text-slate-500">
+              <span v-if="r.course">
+                Course: <span class="font-medium text-slate-700">{{ r.course.code }} — {{ r.course.title }}</span>
+              </span>
+              <span v-else>Course: unknown</span>
+              &nbsp;·&nbsp; Reported by: <span class="font-medium text-slate-700">{{ r.reporter.publicName }}</span>
+            </div>
+
+            <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div v-if="r.contentTitle" class="font-semibold text-slate-800 mb-1">
+                {{ r.contentTitle }}
+              </div>
+              <div v-if="r.contentPreview" class="text-sm text-slate-700 leading-relaxed">
+                {{ r.contentPreview }}
+              </div>
+              <div v-else class="text-sm text-slate-400 italic">
+                Content no longer available.
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-4">
+              <button
+                class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                :disabled="actingId === r.id"
+                @click="dismiss(r)"
+              >
+                Dismiss
+              </button>
+              <button
+                class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                :disabled="actingId === r.id"
+                @click="act(r, 'HIDE')"
+              >
+                {{ actingId === r.id ? "Working..." : "Hide" }}
+              </button>
+              <button
+                class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500 disabled:opacity-60"
+                :disabled="actingId === r.id"
+                @click="act(r, 'DELETE')"
+              >
+                {{ actingId === r.id ? "Working..." : "Delete" }}
+              </button>
+            </div>
+
+          </div>
+        </UiCard>
+      </div>
     </div>
   </div>
 </template>

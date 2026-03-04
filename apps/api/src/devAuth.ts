@@ -34,11 +34,22 @@ export async function attachCoursePseudonym(req: Request, _res: Response, next: 
   next();
 }
 
-export function requireModerator(req: Request, res: Response, next: NextFunction) {
-  const key = req.header("x-mod-key");
-  if (!key || key !== process.env.MOD_KEY) {
-    return res.status(403).json({ error: "Moderator access required" });
+export async function requireModerator(req: Request, res: Response, next: NextFunction) {
+  // Primary: check MODERATOR role in DB
+  if (req.user) {
+    const modRole = await prisma.role.findUnique({ where: { name: "MODERATOR" } });
+    if (modRole) {
+      const userRole = await prisma.userRole.findUnique({
+        where: { userId_roleId: { userId: req.user.id, roleId: modRole.id } },
+      });
+      if (userRole) return next();
+    }
   }
-  next();
+
+  // Fallback: static MOD_KEY header (dev/emergency access)
+  const key = req.header("x-mod-key");
+  if (key && key === process.env.MOD_KEY) return next();
+
+  return res.status(403).json({ error: "Moderator access required" });
 }
 

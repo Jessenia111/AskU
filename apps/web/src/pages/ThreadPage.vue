@@ -6,6 +6,7 @@ import UiCard from "../components/UiCard.vue";
 import ReportMenu from "../components/ReportMenu.vue";
 import ConfirmModal from "../components/ConfirmModal.vue";
 import { useToast } from "../composables/useToast";
+import { useAuthStore } from "../stores/auth";
 
 type ThreadDto = {
   id: string;
@@ -46,8 +47,8 @@ const actingKey = ref<string | null>(null);
 
 const pendingDelete = ref<{ type: "thread"; id: string } | { type: "comment"; id: string } | null>(null);
 
-const modKey = computed(() => (localStorage.getItem("ASKU_MOD_KEY") ?? "").trim());
-const hasMod = computed(() => !!modKey.value);
+const auth = useAuthStore();
+const hasMod = computed(() => auth.isModerator);
 
 function fmt(s: string) {
   return new Date(s).toLocaleString();
@@ -140,7 +141,6 @@ async function modAct(
   try {
     await apiFetch("/api/v1/moderation/actions", {
       method: "POST",
-      headers: { "x-mod-key": modKey.value },
       body: JSON.stringify({
         actionType,
         targetType,

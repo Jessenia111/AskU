@@ -1,4 +1,5 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ override: true });
 import { PrismaClient, RoleName } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -24,16 +25,24 @@ async function main() {
     },
   });
 
-  // 3) Assign STUDENT role
-  const studentRole = await prisma.role.findUniqueOrThrow({
-    where: { name: "STUDENT" },
-  });
+  // 3) Assign STUDENT + MODERATOR roles to dev user
+  const [studentRole, modRole] = await Promise.all([
+    prisma.role.findUniqueOrThrow({ where: { name: "STUDENT" } }),
+    prisma.role.findUniqueOrThrow({ where: { name: "MODERATOR" } }),
+  ]);
 
-  await prisma.userRole.upsert({
-    where: { userId_roleId: { userId: user.id, roleId: studentRole.id } },
-    update: {},
-    create: { userId: user.id, roleId: studentRole.id },
-  });
+  await Promise.all([
+    prisma.userRole.upsert({
+      where: { userId_roleId: { userId: user.id, roleId: studentRole.id } },
+      update: {},
+      create: { userId: user.id, roleId: studentRole.id },
+    }),
+    prisma.userRole.upsert({
+      where: { userId_roleId: { userId: user.id, roleId: modRole.id } },
+      update: {},
+      create: { userId: user.id, roleId: modRole.id },
+    }),
+  ]);
 
   // 4) Course
   const course = await prisma.course.upsert({

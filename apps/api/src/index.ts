@@ -16,7 +16,7 @@ import { generatePseudonymName } from "./nameGen";
 
 
 
-dotenv.config();
+dotenv.config({ override: true });
 
 
 async function cleanupExpiredSessions() {
@@ -30,7 +30,10 @@ cleanupExpiredSessions().catch((e) => {
 });
 
 const app = express();
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+  credentials: true,
+}));
 app.use(express.json());
 app.use(cookieParser());
 app.use(attachAuth);
@@ -150,7 +153,7 @@ app.post(
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false, // локально false, в проде true
+    secure: process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true",
     maxAge: 14 * 24 * 60 * 60 * 1000,
   });
 
@@ -159,7 +162,14 @@ app.post(
 
 // GET /api/v1/me
 app.get("/api/v1/me", requireAuth, async (req: Request, res: Response) => {
-  res.json({ id: req.user!.id, email: req.user!.email });
+  const modRole = await prisma.role.findUnique({ where: { name: "MODERATOR" } });
+  const isModerator = modRole
+    ? !!(await prisma.userRole.findUnique({
+        where: { userId_roleId: { userId: req.user!.id, roleId: modRole.id } },
+      }))
+    : false;
+
+  res.json({ id: req.user!.id, email: req.user!.email, isModerator });
 });
 
 // POST /api/v1/auth/logout
@@ -613,7 +623,7 @@ app.delete("/api/v1/comments/:commentId", requireAuth, async (req: Request, res:
 });
 
 const port = Number(process.env.PORT ?? 8000);
-app.listen(port, "127.0.0.1", () => {
-  console.log(`API running on http://127.0.0.1:${port}`);
+app.listen(port, "localhost", () => {
+  console.log(`API running on http://localhost:${port}`);
 });
 
