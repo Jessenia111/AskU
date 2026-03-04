@@ -6,6 +6,8 @@ import LoginPage from "./pages/LoginPage.vue";
 import VerifyPage from "./pages/VerifyPage.vue";
 import { useAuthStore } from "./stores/auth";
 
+const REDIRECT_KEY = "asku_login_redirect";
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -17,16 +19,28 @@ const router = createRouter({
     { path: "/threads/:threadId", component: ThreadPage },
     { path: "/moderation", component: () => import("./pages/ModerationPage.vue") },
     { path: "/profile", component: () => import("./pages/ProfilePage.vue") },
+    { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
   ],
 });
 
 router.beforeEach(async (to) => {
-  if (to.path === "/login" || to.path === "/verify") return true;
-
   const auth = useAuthStore();
+
+  // Public routes — check if already logged in and redirect away from login/verify
+  if (to.path === "/login" || to.path === "/verify") {
+    const loggedIn = await auth.fetchMe();
+    if (loggedIn) return { path: sessionStorage.getItem(REDIRECT_KEY) ?? "/courses" };
+    return true;
+  }
+
   const loggedIn = await auth.fetchMe(); // uses cache — no network call if already checked
-  if (!loggedIn) return { path: "/login" };
+  if (!loggedIn) {
+    // Save where the user wanted to go so we can redirect them after login
+    sessionStorage.setItem(REDIRECT_KEY, to.fullPath);
+    return { path: "/login" };
+  }
   return true;
 });
 
+export { REDIRECT_KEY };
 export default router;

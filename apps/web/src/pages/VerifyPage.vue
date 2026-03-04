@@ -58,6 +58,7 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 import { useAuthStore } from "../stores/auth";
+import { REDIRECT_KEY } from "../router";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -116,7 +117,9 @@ async function onSubmit() {
 
     sessionStorage.removeItem("asku_auth_email");
     await auth.refresh(); // reset cache so router re-fetches with new session
-    router.push("/courses");
+    const redirect = sessionStorage.getItem(REDIRECT_KEY) ?? "/courses";
+    sessionStorage.removeItem(REDIRECT_KEY);
+    router.push(redirect);
   } catch (e) {
     error.value = String(e);
   } finally {

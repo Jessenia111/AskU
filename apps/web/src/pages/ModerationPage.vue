@@ -24,7 +24,16 @@ const auth = useAuthStore();
 const loading = ref(false);
 const error = ref<string | null>(null);
 const reports = ref<ReportItem[]>([]);
-const actingId = ref<string | null>(null);
+
+type Acting = { id: string; action: "HIDE" | "DELETE" | "DISMISS" };
+const acting = ref<Acting | null>(null);
+
+function isActing(id: string, action: Acting["action"]) {
+  return acting.value?.id === id && acting.value?.action === action;
+}
+function anyActing(id: string) {
+  return acting.value?.id === id;
+}
 
 function fmt(s: string) {
   return new Date(s).toLocaleString();
@@ -49,8 +58,8 @@ async function load() {
 }
 
 async function act(report: ReportItem, actionType: "HIDE" | "DELETE") {
-  if (actingId.value) return;
-  actingId.value = report.id;
+  if (acting.value) return;
+  acting.value = { id: report.id, action: actionType };
   try {
     await apiFetch("/api/v1/moderation/actions", {
       method: "POST",
@@ -67,13 +76,13 @@ async function act(report: ReportItem, actionType: "HIDE" | "DELETE") {
   } catch (e) {
     toast.push("error", `Action failed: ${String(e)}`);
   } finally {
-    actingId.value = null;
+    acting.value = null;
   }
 }
 
 async function dismiss(report: ReportItem) {
-  if (actingId.value) return;
-  actingId.value = report.id;
+  if (acting.value) return;
+  acting.value = { id: report.id, action: "DISMISS" };
   try {
     await apiFetch("/api/v1/moderation/dismiss", {
       method: "POST",
@@ -84,7 +93,7 @@ async function dismiss(report: ReportItem) {
   } catch (e) {
     toast.push("error", `Dismiss failed: ${String(e)}`);
   } finally {
-    actingId.value = null;
+    acting.value = null;
   }
 }
 
@@ -168,24 +177,24 @@ onMounted(() => {
             <div class="flex justify-end gap-2 mt-4">
               <button
                 class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                :disabled="actingId === r.id"
+                :disabled="anyActing(r.id)"
                 @click="dismiss(r)"
               >
-                Dismiss
+                {{ isActing(r.id, 'DISMISS') ? "Dismissing..." : "Dismiss" }}
               </button>
               <button
                 class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                :disabled="actingId === r.id"
+                :disabled="anyActing(r.id)"
                 @click="act(r, 'HIDE')"
               >
-                {{ actingId === r.id ? "Working..." : "Hide" }}
+                {{ isActing(r.id, 'HIDE') ? "Hiding..." : "Hide" }}
               </button>
               <button
                 class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500 disabled:opacity-60"
-                :disabled="actingId === r.id"
+                :disabled="anyActing(r.id)"
                 @click="act(r, 'DELETE')"
               >
-                {{ actingId === r.id ? "Working..." : "Delete" }}
+                {{ isActing(r.id, 'DELETE') ? "Deleting..." : "Delete" }}
               </button>
             </div>
 
