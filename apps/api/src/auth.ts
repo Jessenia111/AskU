@@ -3,7 +3,10 @@ import crypto from "crypto";
 export const SESSION_COOKIE = "asku_session";
 
 export function isUtEmail(email: string) {
-  return email.toLowerCase().endsWith("@ut.ee");
+  const domain = (process.env.ALLOWED_EMAIL_DOMAIN ?? "ut.ee").trim().toLowerCase();
+  // If domain is empty — allow all emails
+  if (!domain) return email.includes("@") && email.length > 3;
+  return email.toLowerCase().endsWith(`@${domain}`);
 }
 
 export function generateCode6() {

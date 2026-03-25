@@ -62,7 +62,11 @@ app.post(
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
 
   const email = parsed.data.email.toLowerCase().trim();
-  if (!isUtEmail(email)) return res.status(400).json({ error: "Only @ut.ee emails are allowed" });
+  const domain = (process.env.ALLOWED_EMAIL_DOMAIN ?? "ut.ee").trim();
+  if (!isUtEmail(email)) {
+    const msg = domain ? `Only @${domain} emails are allowed` : "Invalid email address";
+    return res.status(400).json({ error: msg });
+  }
 
   const code = generateCode6();
   const codeHash = sha256(code);
@@ -190,12 +194,32 @@ app.post("/api/v1/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// GET /api/v1/courses/:courseId/my-pseudonym — returns current user's pseudonym for a course
+// GET /api/v1/courses/:courseId/my-pseudonym — returns (or auto-creates) pseudonym for a course
 app.get("/api/v1/courses/:courseId/my-pseudonym", requireAuth, asyncHandler(async (req, res) => {
   const { courseId } = req.params;
-  const pseudonym = await prisma.pseudonym.findUnique({
+
+  // Verify course exists
+  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  if (!course) return res.status(404).json({ error: "Course not found" });
+
+  let pseudonym = await prisma.pseudonym.findUnique({
     where: { userId_courseId: { userId: req.user!.id, courseId } },
   });
+
+  // Auto-create pseudonym on first visit so the user immediately sees their identity
+  if (!pseudonym) {
+    let attempts = 0;
+    while (!pseudonym && attempts < 5) {
+      try {
+        pseudonym = await prisma.pseudonym.create({
+          data: { userId: req.user!.id, courseId, publicName: generatePseudonymName() },
+        });
+      } catch {
+        attempts++;
+      }
+    }
+  }
+
   res.json({ publicName: pseudonym?.publicName ?? null });
 }));
 
@@ -230,6 +254,10 @@ app.get(
   "/api/v1/courses/:courseId/threads",
   asyncHandler(async (req, res) => {
     const { courseId } = req.params;
+
+    const course = await prisma.course.findUnique({ where: { id: courseId } });
+    if (!course) return res.status(404).json({ error: "Course not found" });
+
     const skip = Math.max(0, Number(req.query.skip ?? 0));
     const take = Math.min(50, Math.max(1, Number(req.query.take ?? 20)));
 
@@ -420,6 +448,16 @@ app.post(
     });
 
     if (!reporterPseudo) return res.status(403).json({ error: "No pseudonym for this course" });
+
+    // Prevent duplicate reports from the same pseudonym on the same target
+    const existing = await prisma.report.findFirst({
+      where: {
+        reporterPseudonymId: reporterPseudo.id,
+        targetId: parsed.data.targetId,
+        status: ReportStatus.OPEN,
+      },
+    });
+    if (existing) return res.status(409).json({ error: "You have already reported this." });
 
     const report = await prisma.report.create({
       data: {
@@ -652,6 +690,35 @@ app.delete("/api/v1/comments/:commentId", requireAuth, asyncHandler(async (req, 
   return res.status(204).send();
 }));
 
+// POST /api/v1/dev/make-moderator — dev only: grant moderator role to a specific allowed email
+app.post("/api/v1/dev/make-moderator", requireAuth, asyncHandler(async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({ error: "Not available in production" });
+  }
+
+  const allowedEmail = process.env.MODERATOR_EMAIL?.toLowerCase().trim();
+  if (!allowedEmail) {
+    return res.status(403).json({ error: "MODERATOR_EMAIL is not configured in .env" });
+  }
+
+  if (req.user!.email.toLowerCase() !== allowedEmail) {
+    return res.status(403).json({ error: "You don't have permission to do this." });
+  }
+
+  let modRole = await prisma.role.findUnique({ where: { name: "MODERATOR" } });
+  if (!modRole) {
+    modRole = await prisma.role.create({ data: { name: "MODERATOR" } });
+  }
+
+  await prisma.userRole.upsert({
+    where: { userId_roleId: { userId: req.user!.id, roleId: modRole.id } },
+    update: {},
+    create: { userId: req.user!.id, roleId: modRole.id },
+  });
+
+  res.json({ ok: true, message: "Moderator role granted" });
+}));
+
 // Global error handler — catches any error passed via next(err) or thrown in asyncHandler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[UNHANDLED ERROR]", err);
@@ -661,7 +728,8 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const port = Number(process.env.PORT ?? 8000);
-app.listen(port, "localhost", () => {
-  console.log(`API running on http://localhost:${port}`);
+const host = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+app.listen(port, host, () => {
+  console.log(`API running on http://${host}:${port}`);
 });
 

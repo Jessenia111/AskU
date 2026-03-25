@@ -40,12 +40,13 @@ const commentBody = ref("");
 const posting = ref(false);
 
 const reportingKey = ref<string | null>(null);
-const lastReportKey = ref<string | null>(null);
-const lastReportAt = ref(0);
+const reportedIds = ref<Set<string>>(new Set());
 
 const actingKey = ref<string | null>(null);
 
 const pendingDelete = ref<{ type: "thread"; id: string } | { type: "comment"; id: string } | null>(null);
+// Separate pending state for moderator DELETE (uses moderation/actions API)
+const pendingModDelete = ref<{ targetType: "THREAD" | "COMMENT"; targetId: string } | null>(null);
 
 const auth = useAuthStore();
 const hasMod = computed(() => auth.isModerator);
@@ -94,15 +95,10 @@ async function submitReport(
   targetId: string,
   reason: "spam" | "abuse"
 ) {
-  const key = `${targetType}:${targetId}:${reason}`;
-  const now = Date.now();
-
   if (reportingKey.value) return;
-  if (lastReportKey.value === key && now - lastReportAt.value < 1200) return;
+  if (reportedIds.value.has(targetId)) return;
 
-  reportingKey.value = key;
-  lastReportKey.value = key;
-  lastReportAt.value = now;
+  reportingKey.value = targetId;
 
   const label = reason === "spam" ? "Spam" : "Abuse";
   const apiReason = reason === "spam" ? "SPAM" : "ABUSE";
@@ -110,12 +106,9 @@ async function submitReport(
   try {
     await apiFetch("/api/v1/reports", {
       method: "POST",
-      body: JSON.stringify({
-        targetType,
-        targetId,
-        reason: apiReason,
-      }),
+      body: JSON.stringify({ targetType, targetId, reason: apiReason }),
     });
+    reportedIds.value.add(targetId);
     toast.push("success", `Report submitted: ${label}`);
   } catch (e) {
     toast.push("error", e instanceof ApiError ? e.message : `Report failed (${label})`);
@@ -134,6 +127,20 @@ async function modAct(
     return;
   }
 
+  // DELETE always shows a confirmation modal first
+  if (actionType === "DELETE") {
+    pendingModDelete.value = { targetType, targetId };
+    return;
+  }
+
+  await executeModAct(targetType, targetId, actionType);
+}
+
+async function executeModAct(
+  targetType: "THREAD" | "COMMENT",
+  targetId: string,
+  actionType: "HIDE" | "DELETE"
+) {
   const key = `${actionType}:${targetType}:${targetId}`;
   if (actingKey.value) return;
   actingKey.value = key;
@@ -141,21 +148,27 @@ async function modAct(
   try {
     await apiFetch("/api/v1/moderation/actions", {
       method: "POST",
-      body: JSON.stringify({
-        actionType,
-        targetType,
-        targetId,
-        note: "",
-      }),
+      body: JSON.stringify({ actionType, targetType, targetId, note: "" }),
     });
 
     toast.push("success", `${actionType} applied`);
-    await load();
+    if (actionType === "DELETE" && targetType === "THREAD") {
+      await router.push(`/courses/${thread.value?.courseId}`);
+    } else {
+      await load();
+    }
   } catch (e) {
     toast.push("error", e instanceof ApiError ? e.message : "Action failed");
   } finally {
     actingKey.value = null;
   }
+}
+
+async function confirmModDelete() {
+  if (!pendingModDelete.value) return;
+  const { targetType, targetId } = pendingModDelete.value;
+  pendingModDelete.value = null;
+  await executeModAct(targetType, targetId, "DELETE");
 }
 
 function confirmDeleteThread() {
@@ -212,6 +225,16 @@ onMounted(load);
       @cancel="pendingDelete = null"
     />
 
+    <ConfirmModal
+      v-if="pendingModDelete"
+      :title="pendingModDelete.targetType === 'THREAD' ? 'Delete thread? (Moderator)' : 'Delete comment? (Moderator)'"
+      message="This will permanently delete the content. This cannot be undone."
+      confirm-label="Delete"
+      :danger="true"
+      @confirm="confirmModDelete"
+      @cancel="pendingModDelete = null"
+    />
+
     <div class="asku-subheader">
       <router-link class="asku-back" :to="backTo">← Back to Threads</router-link>
       <div class="asku-section-title">Thread</div>
@@ -238,7 +261,8 @@ onMounted(load);
 
           <div class="flex items-center justify-end gap-2 mt-6">
             <ReportMenu
-              :disabled="(reportingKey?.startsWith(`THREAD:${thread.id}:`) ?? false)"
+              :disabled="reportingKey === thread.id"
+              :reported="reportedIds.has(thread.id)"
               @select="(reason) => submitReport('THREAD', thread!.id, reason)"
             />
 
@@ -300,7 +324,8 @@ onMounted(load);
 
                 <div class="flex items-center justify-end gap-2 mt-4">
                   <ReportMenu
-                    :disabled="(reportingKey?.startsWith(`COMMENT:${c.id}:`) ?? false)"
+                    :disabled="reportingKey === c.id"
+                    :reported="reportedIds.has(c.id)"
                     @select="(reason) => submitReport('COMMENT', c.id, reason)"
                   />
 

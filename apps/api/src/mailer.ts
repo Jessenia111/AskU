@@ -26,8 +26,9 @@ function createTransporter() {
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
-    auth: { user, pass },
+    secure: port === 465,   // true for 465 (SSL), false for 587 (STARTTLS)
+    requireTLS: port === 587,
+    auth: { user, pass, type: "LOGIN" },
   });
 }
 
@@ -43,8 +44,13 @@ async function getTransporter() {
       console.log("[SMTP] from:", getEnv("SMTP_FROM"));
     }
 
-    // Быстрая проверка соединения/логина (сразу покажет 535)
-    await cachedTransporter.verify();
+    // Quick connection/auth check — if it fails, don't cache the broken transporter
+    try {
+      await cachedTransporter.verify();
+    } catch (err) {
+      cachedTransporter = null;
+      throw err;
+    }
   }
 
   return cachedTransporter;

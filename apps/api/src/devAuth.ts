@@ -3,6 +3,8 @@ import { prisma } from "./prisma";
 import { generatePseudonymName } from "./nameGen";
 
 export async function devAuth(req: Request, _res: Response, next: NextFunction) {
+  // Only inject dev user if there is no real session already
+  if (req.user) return next();
   const utSubject = "dev-user-1";
   const user = await prisma.user.findUnique({ where: { utSubject } });
   if (user) req.user = { id: user.id, email: user.email };
@@ -46,9 +48,11 @@ export async function requireModerator(req: Request, res: Response, next: NextFu
     }
   }
 
-  // Fallback: static MOD_KEY header (dev/emergency access)
-  const key = req.header("x-mod-key");
-  if (key && key === process.env.MOD_KEY) return next();
+  // Fallback: static MOD_KEY header (dev/emergency access — non-production only)
+  if (process.env.NODE_ENV !== "production") {
+    const key = req.header("x-mod-key");
+    if (key && key === process.env.MOD_KEY) return next();
+  }
 
   return res.status(403).json({ error: "Moderator access required" });
 }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import UiCard from "../components/UiCard.vue";
-import { apiFetch } from "../api/client";
+import { apiFetch, ApiError } from "../api/client";
 import { useToast } from "../composables/useToast";
 import { useAuthStore } from "../stores/auth";
 
@@ -51,7 +51,7 @@ async function load() {
   try {
     reports.value = await apiFetch<ReportItem[]>("/api/v1/moderation/reports");
   } catch (e) {
-    error.value = String(e);
+    error.value = e instanceof ApiError ? e.message : String(e);
   } finally {
     loading.value = false;
   }
@@ -74,7 +74,7 @@ async function act(report: ReportItem, actionType: "HIDE" | "DELETE") {
     toast.push("success", `${actionType === "HIDE" ? "Hidden" : "Deleted"} successfully`);
     await load();
   } catch (e) {
-    toast.push("error", `Action failed: ${String(e)}`);
+    toast.push("error", e instanceof ApiError ? e.message : `Action failed`);
   } finally {
     acting.value = null;
   }
@@ -91,7 +91,7 @@ async function dismiss(report: ReportItem) {
     toast.push("info", "Report dismissed");
     await load();
   } catch (e) {
-    toast.push("error", `Dismiss failed: ${String(e)}`);
+    toast.push("error", e instanceof ApiError ? e.message : `Dismiss failed`);
   } finally {
     acting.value = null;
   }

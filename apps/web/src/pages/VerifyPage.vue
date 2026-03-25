@@ -56,7 +56,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { apiFetch } from "../api/client";
+import { apiFetch, ApiError } from "../api/client";
 import { useAuthStore } from "../stores/auth";
 import { REDIRECT_KEY } from "../router";
 
@@ -100,7 +100,7 @@ async function resend() {
     });
     startCooldown(30);
   } catch (e) {
-    error.value = String(e);
+    error.value = e instanceof ApiError ? e.message : String(e);
   } finally {
     resendLoading.value = false;
   }
@@ -121,7 +121,7 @@ async function onSubmit() {
     sessionStorage.removeItem(REDIRECT_KEY);
     router.push(redirect);
   } catch (e) {
-    error.value = String(e);
+    error.value = e instanceof ApiError ? e.message : String(e);
   } finally {
     loading.value = false;
   }

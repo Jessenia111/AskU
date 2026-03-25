@@ -19,6 +19,7 @@ const router = createRouter({
     { path: "/threads/:threadId", component: ThreadPage },
     { path: "/moderation", component: () => import("./pages/ModerationPage.vue") },
     { path: "/profile", component: () => import("./pages/ProfilePage.vue") },
+    ...(import.meta.env.DEV ? [{ path: "/dev", component: () => import("./pages/DevPage.vue") }] : []),
     { path: "/:pathMatch(.*)*", component: () => import("./pages/NotFoundPage.vue") },
   ],
 });
@@ -29,7 +30,11 @@ router.beforeEach(async (to) => {
   // Public routes — check if already logged in and redirect away from login/verify
   if (to.path === "/login" || to.path === "/verify") {
     const loggedIn = await auth.fetchMe();
-    if (loggedIn) return { path: sessionStorage.getItem(REDIRECT_KEY) ?? "/courses" };
+    if (loggedIn) {
+      const redirect = sessionStorage.getItem(REDIRECT_KEY) ?? "/courses";
+      sessionStorage.removeItem(REDIRECT_KEY);
+      return { path: redirect };
+    }
     return true;
   }
 

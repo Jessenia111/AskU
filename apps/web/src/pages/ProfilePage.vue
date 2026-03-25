@@ -90,7 +90,7 @@ onMounted(load);
           v-for="p in pseudonyms"
           :key="p.courseId"
           :to="`/courses/${p.courseId}`"
-          style="text-decoration: none"
+          class="no-underline"
         >
           <UiCard :topbar="false">
             <div class="asku-card-pad flex items-center justify-between gap-4">

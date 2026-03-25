@@ -9,6 +9,7 @@ import { useClickOutside } from "../composables/useClickOutside";
 const router = useRouter();
 const toast = useToast();
 const auth = useAuthStore();
+const isDev = import.meta.env.DEV;
 
 const open = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
@@ -49,6 +50,7 @@ function go(path: string) {
         <button class="asku-menu-item" @click="go('/courses')">Courses</button>
         <button class="asku-menu-item" @click="go('/profile')">My Profile</button>
         <button class="asku-menu-item" @click="go('/moderation')">Moderation</button>
+        <button v-if="isDev" class="asku-menu-item" @click="go('/dev')">Dev Tools</button>
         <div class="asku-menu-sep"></div>
         <button class="asku-menu-item danger" @click="logout">Logout</button>
       </div>

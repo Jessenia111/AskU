@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { apiFetch } from "../api/client";
+import { apiFetch, ApiError } from "../api/client";
 
 type Course = { id: string; code: string; title: string; semester: string };
 
@@ -14,7 +14,7 @@ async function load() {
   try {
     courses.value = await apiFetch<Course[]>("/api/v1/courses");
   } catch (e) {
-    error.value = String(e);
+    error.value = e instanceof ApiError ? e.message : String(e);
   } finally {
     loading.value = false;
   }

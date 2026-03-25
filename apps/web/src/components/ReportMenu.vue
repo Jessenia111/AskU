@@ -4,6 +4,7 @@ import { useClickOutside } from "../composables/useClickOutside";
 
 const props = defineProps<{
   disabled?: boolean;
+  reported?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -21,7 +22,7 @@ function choose(reason: "spam" | "abuse") {
 }
 
 function toggle() {
-  if (props.disabled) return;
+  if (props.disabled || props.reported) return;
   open.value = !open.value;
 }
 </script>
@@ -29,11 +30,13 @@ function toggle() {
 <template>
   <div ref="wrapRef" class="report-wrap">
     <button
-      class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-      :disabled="disabled"
+      class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed"
+      :disabled="disabled || reported"
       @click="toggle"
     >
-      {{ disabled ? "Reporting..." : "Report" }} <span class="ml-1 opacity-60">▼</span>
+      <span v-if="reported" class="text-slate-400">Reported</span>
+      <span v-else-if="disabled">Reporting...</span>
+      <span v-else>Report <span class="ml-1 opacity-60">▼</span></span>
     </button>
 
     <div v-if="open" class="report-menu">

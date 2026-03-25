@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_BASE as string ?? "http://localhost:8000";
+import { useAuthStore } from "../stores/auth";
+
+const API_BASE: string = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 export class ApiError extends Error {
   constructor(
@@ -20,11 +22,12 @@ function friendlyMessage(status: number, serverMsg: string): string {
 }
 
 export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+  const hasBody = init.method && init.method !== "GET" && init.method !== "HEAD";
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },
   });
@@ -40,6 +43,9 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
     } catch {
       serverMsg = await res.text().catch(() => "");
     }
+    if (res.status === 401) {
+      try { useAuthStore().clear(); } catch { /* pinia may not be ready */ }
+    }
     throw new ApiError(res.status, friendlyMessage(res.status, serverMsg), retryAfter);
   }
 
@@ -48,5 +54,9 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
   const text = await res.text();
   if (!text) return undefined as T;
 
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(res.status, "Unexpected response from server");
+  }
 }

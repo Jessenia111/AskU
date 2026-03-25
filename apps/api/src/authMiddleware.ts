@@ -8,20 +8,26 @@ export async function attachAuth(req: Request, res: Response, next: NextFunction
 
   const tokenHash = sha256(token);
 
-  const session = await prisma.session.findUnique({
-    where: { tokenHash },
-    include: { user: { select: { id: true, email: true } } },
-  });
+  try {
+    const session = await prisma.session.findUnique({
+      where: { tokenHash },
+      include: { user: { select: { id: true, email: true } } },
+    });
 
-  if (!session) return next();
+    if (!session) return next();
 
-  if (session.expiresAt < new Date()) {
-    await prisma.session.deleteMany({ where: { tokenHash } });
-    res.clearCookie(SESSION_COOKIE);
-    return next();
+    if (session.expiresAt < new Date()) {
+      await prisma.session.deleteMany({ where: { tokenHash } });
+      res.clearCookie(SESSION_COOKIE);
+      return next();
+    }
+
+    req.user = session.user;
+  } catch (err) {
+    console.error("[AUTH] Failed to load session from DB:", err);
+    // Continue unauthenticated — don't crash the request
   }
 
-  req.user = session.user;
   return next();
 }
 

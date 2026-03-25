@@ -1,84 +1,138 @@
 <template>
   <div class="min-h-screen flex items-center justify-center px-4">
     <div class="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-      <h1 class="text-2xl font-semibold">Log in to AskU</h1>
-      <p class="mt-1 text-sm text-zinc-600">
-        Use your University of Tartu email (<span class="font-medium">@ut.ee</span>).
-      </p>
 
-      <form class="mt-6 space-y-4" @submit.prevent="onSubmit">
-        <div>
-          <label class="block text-sm font-medium text-zinc-800">Email</label>
-          <input
-            v-model.trim="email"
-            type="email"
-            autocomplete="email"
-            inputmode="email"
-            placeholder="name.surname@ut.ee"
-            class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10"
-            :disabled="loading"
-          />
-          <p v-if="email && !isUtEmail(email)" class="mt-1 text-xs text-red-600">
-            Email must end with @ut.ee
-          </p>
-        </div>
-
+      <!-- Quick login banner when saved email exists -->
+      <div
+        v-if="savedEmail && !showFullForm"
+        class="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4"
+      >
+        <p class="text-sm text-zinc-600 mb-3">
+          Continue as <span class="font-semibold text-zinc-900">{{ savedEmail }}</span>?
+        </p>
         <button
-          type="submit"
-          class="w-full rounded-xl bg-zinc-900 px-4 py-2 text-white disabled:opacity-60"
-          :disabled="loading || !canSubmit"
+          class="w-full rounded-xl bg-zinc-900 px-4 py-2 text-white disabled:opacity-60 mb-2"
+          :disabled="loading"
+          @click="quickLogin"
         >
-          <span v-if="!loading">Send verification code</span>
+          <span v-if="!loading">Send me the code</span>
           <span v-else>Sending…</span>
         </button>
+        <button
+          class="w-full rounded-xl border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
+          @click="showFullForm = true"
+        >
+          Use a different email
+        </button>
+        <p v-if="error" class="mt-2 text-sm text-red-600">{{ error }}</p>
+      </div>
 
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
-      </form>
+      <!-- Full login form -->
+      <template v-if="!savedEmail || showFullForm">
+        <h1 class="text-2xl font-semibold">Log in to AskU</h1>
+        <p v-if="DOMAIN" class="mt-1 text-sm text-zinc-600">
+          Use your University of Tartu email (<span class="font-medium">{{ domainHint }}</span>).
+        </p>
+        <p v-else class="mt-1 text-sm text-zinc-600">Enter your email address.</p>
+
+        <form class="mt-6 space-y-4" @submit.prevent="onSubmit">
+          <div>
+            <label class="block text-sm font-medium text-zinc-800">Email</label>
+            <input
+              v-model.trim="email"
+              type="email"
+              autocomplete="email"
+              inputmode="email"
+              :placeholder="DOMAIN ? `name.surname@${DOMAIN}` : 'your@email.com'"
+              class="mt-1 w-full rounded-xl border border-zinc-300 px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10"
+              :disabled="loading"
+            />
+            <p v-if="email && !isAllowedEmail(email)" class="mt-1 text-xs text-red-600">
+              {{ DOMAIN ? `Email must end with @${DOMAIN}` : 'Please enter a valid email' }}
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full rounded-xl bg-zinc-900 px-4 py-2 text-white disabled:opacity-60"
+            :disabled="loading || !canSubmit"
+          >
+            <span v-if="!loading">Send verification code</span>
+            <span v-else>Sending…</span>
+          </button>
+
+          <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+        </form>
+      </template>
 
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 
 const router = useRouter();
 
 const email = ref("");
+const savedEmail = ref<string | null>(null);
+const showFullForm = ref(false);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-function isUtEmail(value: string) {
+const SAVED_EMAIL_KEY = "asku_saved_email";
+
+onMounted(() => {
+  const saved = localStorage.getItem(SAVED_EMAIL_KEY);
+  if (saved) {
+    savedEmail.value = saved;
+    email.value = saved;
+  }
+});
+
+const DOMAIN = (import.meta.env.VITE_ALLOWED_EMAIL_DOMAIN as string || "").trim().toLowerCase();
+
+function isAllowedEmail(value: string) {
   const v = value.trim().toLowerCase();
-  return v.endsWith("@ut.ee") && v.length > "@ut.ee".length;
+  if (!DOMAIN) return v.includes("@") && v.length > 3;
+  return v.endsWith(`@${DOMAIN}`) && v.length > `@${DOMAIN}`.length;
 }
 
-const canSubmit = computed(() => isUtEmail(email.value) && !loading.value);
+const domainHint = DOMAIN ? `@${DOMAIN}` : "any email";
+const canSubmit = computed(() => isAllowedEmail(email.value) && !loading.value);
 
-async function onSubmit() {
+async function sendCode(targetEmail: string) {
   error.value = null;
-
-  const value = email.value.trim().toLowerCase();
-  if (!isUtEmail(value)) {
-    error.value = "Please enter a valid @ut.ee email.";
-    return;
-  }
-
   loading.value = true;
   try {
-   await apiFetch("/api/v1/auth/request", {
-    method: "POST",
-    body: JSON.stringify({ email: email.value }),
+    await apiFetch("/api/v1/auth/request", {
+      method: "POST",
+      body: JSON.stringify({ email: targetEmail }),
     });
-
-    sessionStorage.setItem("asku_auth_email", email.value.trim().toLowerCase());
+    const cleanEmail = targetEmail.trim().toLowerCase();
+    sessionStorage.setItem("asku_auth_email", cleanEmail);
+    localStorage.setItem(SAVED_EMAIL_KEY, cleanEmail);
     router.push("/verify");
-  } catch (e: any) {
-    error.value = typeof e?.message === "string" ? e.message : "Request failed";
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "Request failed";
   } finally {
     loading.value = false;
   }
+}
+
+async function quickLogin() {
+  if (!savedEmail.value) return;
+  await sendCode(savedEmail.value);
+}
+
+async function onSubmit() {
+  const value = email.value.trim().toLowerCase();
+  if (!isAllowedEmail(value)) {
+    error.value = DOMAIN ? `Please enter a valid @${DOMAIN} email.` : "Please enter a valid email.";
+    return;
+  }
+  await sendCode(value);
 }
 </script>

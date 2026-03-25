@@ -27,7 +27,9 @@ const threads = ref<ThreadListItem[]>([]);
 const total = ref(0);
 const loadingMore = ref(false);
 const loading = ref(false);
-const error = ref<string | null>(null);
+// Separate error for page load vs form submission
+const loadError = ref<string | null>(null);
+const createError = ref<string | null>(null);
 
 const myPseudonym = ref<string | null>(null);
 
@@ -36,9 +38,17 @@ const title = ref("");
 const body = ref("");
 const submitting = ref(false);
 
+// Fix #4: title validation message
+const titleError = computed(() => {
+  if (!title.value) return null;
+  if (title.value.trim().length < 3) return "Title must be at least 3 characters.";
+  return null;
+});
+const canPost = computed(() => !submitting.value && title.value.trim().length >= 3 && body.value.trim().length > 0);
+
+// Fix #6: track which thread IDs have already been reported
 const reportingKey = ref<string | null>(null);
-const lastReportKey = ref<string | null>(null);
-const lastReportAt = ref(0);
+const reportedIds = ref<Set<string>>(new Set());
 
 const PAGE_SIZE = 20;
 const hasMore = computed(() => threads.value.length < total.value);
@@ -49,17 +59,17 @@ function fmt(s: string) {
 
 async function load() {
   loading.value = true;
-  error.value = null;
+  loadError.value = null;
   try {
     const [page, pseudonymData] = await Promise.all([
       apiFetch<ThreadsPage>(`/api/v1/courses/${courseId.value}/threads?skip=0&take=${PAGE_SIZE}`),
-      apiFetch<{ publicName: string | null }>(`/api/v1/courses/${courseId.value}/my-pseudonym`),
+      apiFetch<{ publicName: string | null }>(`/api/v1/courses/${courseId.value}/my-pseudonym`).catch(() => ({ publicName: null })),
     ]);
     threads.value = page.items;
     total.value = page.total;
     myPseudonym.value = pseudonymData.publicName;
   } catch (e) {
-    error.value = e instanceof ApiError ? e.message : String(e);
+    loadError.value = e instanceof ApiError ? e.message : String(e);
   } finally {
     loading.value = false;
   }
@@ -82,7 +92,7 @@ async function loadMore() {
 
 async function createThread() {
   submitting.value = true;
-  error.value = null;
+  createError.value = null;
   try {
     await apiFetch(`/api/v1/courses/${courseId.value}/threads`, {
       method: "POST",
@@ -95,23 +105,20 @@ async function createThread() {
     await load();
   } catch (e) {
     const msg = e instanceof ApiError ? e.message : String(e);
+    // Fix #5: show form error without hiding the thread list
+    createError.value = msg;
     toast.push("error", msg);
-    error.value = msg;
   } finally {
     submitting.value = false;
   }
 }
 
 async function submitReport(targetId: string, reason: "spam" | "abuse") {
-  const key = `THREAD:${targetId}:${reason}`;
-  const now = Date.now();
-
   if (reportingKey.value) return;
-  if (lastReportKey.value === key && now - lastReportAt.value < 1200) return;
+  // Fix #6: permanently block re-reporting the same thread
+  if (reportedIds.value.has(targetId)) return;
 
-  reportingKey.value = key;
-  lastReportKey.value = key;
-  lastReportAt.value = now;
+  reportingKey.value = targetId;
 
   const label = reason === "spam" ? "Spam" : "Abuse";
   const apiReason = reason === "spam" ? "SPAM" : "ABUSE";
@@ -121,6 +128,7 @@ async function submitReport(targetId: string, reason: "spam" | "abuse") {
       method: "POST",
       body: JSON.stringify({ targetType: "THREAD", targetId, reason: apiReason }),
     });
+    reportedIds.value.add(targetId);
     toast.push("success", `Report submitted: ${label}`);
   } catch (e) {
     toast.push("error", e instanceof ApiError ? e.message : `Report failed (${label})`);
@@ -160,33 +168,41 @@ onMounted(load);
         </div>
 
         <div class="flex flex-col gap-3">
-          <input v-model="title" class="asku-input" placeholder="Title" />
+          <div>
+            <input v-model="title" class="asku-input" placeholder="Title (min. 3 characters)" />
+            <!-- Fix #4: validation message -->
+            <p v-if="titleError" class="mt-1 text-xs text-red-500">{{ titleError }}</p>
+          </div>
           <textarea v-model="body" class="asku-textarea" rows="5" placeholder="Body" />
+
+          <!-- Fix #5: form error shown inside form, not over thread list -->
+          <div v-if="createError" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ createError }}
+          </div>
 
           <div class="flex items-center gap-3">
             <button
               class="asku-btn"
-              :disabled="submitting || !title.trim() || !body.trim()"
+              :disabled="!canPost"
               @click="createThread"
             >
               {{ submitting ? "Posting..." : "Post" }}
             </button>
-            <button class="asku-btn-ghost" :disabled="submitting" @click="showNew = false">
+            <button class="asku-btn-ghost" :disabled="submitting" @click="showNew = false; createError = null">
               Cancel
             </button>
           </div>
-
         </div>
       </div>
     </UiCard>
 
     <div v-if="loading" class="asku-muted mt-4">Loading…</div>
-    <div v-if="error" class="asku-error mt-4">{{ error }}</div>
+    <div v-if="loadError" class="asku-error mt-4">{{ loadError }}</div>
 
-    <div v-if="!loading && !error" class="flex flex-col gap-6 mt-4">
+    <!-- Fix #5: threads always visible even after form error -->
+    <div v-if="!loading && !loadError" class="flex flex-col gap-6 mt-4">
       <!-- Empty state -->
       <div v-if="threads.length === 0" class="flex flex-col items-center gap-3 py-16 text-center">
-        <div class="text-4xl">💬</div>
         <div class="text-lg font-semibold text-slate-700">No threads yet</div>
         <div class="text-sm text-slate-400">Be the first to start a discussion in this course.</div>
         <button class="asku-btn mt-2" @click="showNew = true">Post the first thread</button>
@@ -210,8 +226,10 @@ onMounted(load);
           </div>
 
           <div class="flex justify-end mt-6">
+            <!-- Fix #6: disabled after reported -->
             <ReportMenu
-              :disabled="(reportingKey?.startsWith(`THREAD:${t.id}:`) ?? false)"
+              :disabled="reportingKey === t.id || reportedIds.has(t.id)"
+              :reported="reportedIds.has(t.id)"
               @select="(reason) => submitReport(t.id, reason)"
             />
           </div>
