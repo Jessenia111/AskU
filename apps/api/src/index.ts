@@ -87,13 +87,23 @@ app.post(
       await sendVerificationCodeEmail(email, code);
     } catch (err) {
       console.error("[AUTH] Failed to send verification email:", err);
-      return res.status(500).json({ error: "Failed to send verification email. Please try again." });
+      // In dev: still print code so testing can continue even if email fails
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[AUTH DEV] Email failed but code for ${email}: ${code}`);
+      } else {
+        return res.status(500).json({ error: "Failed to send verification email. Please try again." });
+      }
     }
   } else if (process.env.NODE_ENV !== "production") {
     console.log(`[AUTH DEV] Code for ${email}: ${code}`);
   } else {
     console.error("[AUTH] SMTP is not configured in production!");
     return res.status(500).json({ error: "Email service is not configured." });
+  }
+
+  // Always log code in dev for easy testing with multiple users
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[AUTH DEV] ✉️  ${email} → code: ${code}`);
   }
 
   res.json({ ok: true });
@@ -144,6 +154,19 @@ app.post(
       utSubject,
     },
   });
+
+  // Auto-grant MODERATOR role if email matches MODERATOR_EMAIL env var
+  const moderatorEmail = process.env.MODERATOR_EMAIL?.toLowerCase().trim();
+  if (moderatorEmail && email === moderatorEmail) {
+    const modRole = await prisma.role.findUnique({ where: { name: "MODERATOR" } });
+    if (modRole) {
+      await prisma.userRole.upsert({
+        where: { userId_roleId: { userId: user.id, roleId: modRole.id } },
+        update: {},
+        create: { userId: user.id, roleId: modRole.id },
+      });
+    }
+  }
 
   // create session
   const token = randomToken();
@@ -273,10 +296,11 @@ app.get(
     ]);
 
     res.json({
+      courseTitle: course.title,
       items: threads.map((t) => ({
         id: t.id,
         courseId: t.courseId,
-        author: { publicName: t.author.publicName },
+        author: { pseudonymId: t.authorPseudonymId, publicName: t.author.publicName },
         title: t.title,
         bodyPreview: t.body.slice(0, 200),
         status: t.status,
@@ -315,7 +339,7 @@ app.get("/api/v1/threads/:threadId", asyncHandler(async (req, res) => {
   res.json({
     id: thread.id,
     courseId: thread.courseId,
-    author: { publicName: thread.author.publicName },
+      author: { pseudonymId: thread.authorPseudonymId, publicName: thread.author.publicName },
     isMine: threadIsMine,
     title: thread.title,
     body: thread.body,
@@ -325,7 +349,7 @@ app.get("/api/v1/threads/:threadId", asyncHandler(async (req, res) => {
       id: c.id,
       body: c.body,
       createdAt: c.createdAt,
-      author: { publicName: c.author.publicName },
+      author: { pseudonymId: c.authorPseudonymId, publicName: c.author.publicName },
       isMine: myUserId ? c.author.userId === myUserId : false,
     })),
   });
@@ -490,7 +514,7 @@ app.get("/api/v1/moderation/reports", requireAuth, requireModerator, asyncHandle
     where: { status: "OPEN" },
     orderBy: { createdAt: "desc" },
     include: {
-      reporter: { select: { publicName: true, courseId: true } },
+      reporter: { select: { id: true, publicName: true, courseId: true } },
     },
   });
 
@@ -527,7 +551,7 @@ app.get("/api/v1/moderation/reports", requireAuth, requireModerator, asyncHandle
       return {
         id: r.id,
         createdAt: r.createdAt,
-        reporter: { publicName: r.reporter.publicName },
+        reporter: { pseudonymId: r.reporter.id, publicName: r.reporter.publicName },
         course: course ? { id: course.id, code: course.code, title: course.title } : null,
         targetType: r.targetType,
         targetId: r.targetId,
@@ -628,6 +652,17 @@ app.post("/api/v1/moderation/dismiss", requireAuth, requireModerator, asyncHandl
   });
 
   res.json({ ok: true });
+}));
+
+// GET /api/v1/pseudonyms/:pseudonymId/identity — moderator only: reveal real email behind a pseudonym
+app.get("/api/v1/pseudonyms/:pseudonymId/identity", requireAuth, requireModerator, asyncHandler(async (req, res) => {
+  const { pseudonymId } = req.params;
+  const pseudonym = await prisma.pseudonym.findUnique({
+    where: { id: pseudonymId },
+    include: { user: { select: { email: true } } },
+  });
+  if (!pseudonym) return res.status(404).json({ error: "Pseudonym not found" });
+  res.json({ pseudonymId, publicName: pseudonym.publicName, email: pseudonym.user.email });
 }));
 
 // DELETE /api/v1/threads/:threadId (author can hide own thread)

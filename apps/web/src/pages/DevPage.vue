@@ -1,26 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { apiFetch, ApiError } from "../api/client";
 import { useAuthStore } from "../stores/auth";
-import { useToast } from "../composables/useToast";
 import UiCard from "../components/UiCard.vue";
 
 const auth = useAuthStore();
-const toast = useToast();
-const loading = ref(false);
-
-async function makeModerator() {
-  loading.value = true;
-  try {
-    await apiFetch("/api/v1/dev/make-moderator", { method: "POST" });
-    await auth.refresh();
-    toast.push("success", "You are now a Moderator. Refresh the page if needed.");
-  } catch (e) {
-    toast.push("error", e instanceof ApiError ? e.message : "Failed");
-  } finally {
-    loading.value = false;
-  }
-}
 </script>
 
 <template>
@@ -39,27 +21,13 @@ async function makeModerator() {
         <div class="text-slate-600 text-sm">{{ auth.user?.email ?? "—" }}</div>
         <div class="mt-1 text-sm">
           Role:
-          <span
-            :class="auth.isModerator
-              ? 'text-green-700 font-semibold'
-              : 'text-slate-500'"
-          >
+          <span :class="auth.isModerator ? 'text-green-700 font-semibold' : 'text-slate-500'">
             {{ auth.isModerator ? "Moderator" : "Student" }}
           </span>
         </div>
-      </div>
-    </UiCard>
-
-    <UiCard :topbar="false" class="mt-4">
-      <div class="asku-card-pad">
-        <div class="text-lg font-semibold mb-4">Grant Moderator Role</div>
-        <button
-          class="asku-btn"
-          :disabled="loading || auth.isModerator"
-          @click="makeModerator"
-        >
-          {{ auth.isModerator ? "Already a Moderator" : loading ? "Granting..." : "Make me Moderator" }}
-        </button>
+        <div v-if="!auth.isModerator" class="mt-3 text-xs text-slate-400">
+          Moderator role is granted automatically on login if your email matches MODERATOR_EMAIL in .env
+        </div>
       </div>
     </UiCard>
   </div>

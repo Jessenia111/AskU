@@ -5,13 +5,14 @@ import { apiFetch, ApiError } from "../api/client";
 import UiCard from "../components/UiCard.vue";
 import ReportMenu from "../components/ReportMenu.vue";
 import ConfirmModal from "../components/ConfirmModal.vue";
+import PseudonymBadge from "../components/PseudonymBadge.vue";
 import { useToast } from "../composables/useToast";
 import { useAuthStore } from "../stores/auth";
 
 type ThreadDto = {
   id: string;
   courseId: string;
-  author: { publicName: string };
+  author: { pseudonymId: string; publicName: string };
   isMine: boolean;
   title: string;
   body: string;
@@ -21,7 +22,7 @@ type ThreadDto = {
     id: string;
     body: string;
     createdAt: string;
-    author: { publicName: string };
+    author: { pseudonymId: string; publicName: string };
     isMine: boolean;
   }>;
 };
@@ -252,7 +253,8 @@ onMounted(load);
           </div>
 
           <div class="asku-meta mt-2">
-            {{ thread.author.publicName }} · {{ thread.status }}
+            <PseudonymBadge :pseudonym-id="thread.author.pseudonymId" :public-name="thread.author.publicName" />
+            · {{ thread.status }}
           </div>
 
           <div class="asku-body mt-4">
@@ -313,7 +315,7 @@ onMounted(load);
               <div class="asku-card-pad">
                 <div class="flex items-start justify-between gap-6">
                   <div class="asku-meta">
-                    {{ c.author.publicName }}
+                    <PseudonymBadge :pseudonym-id="c.author.pseudonymId" :public-name="c.author.publicName" />
                   </div>
                   <div class="asku-date">{{ fmt(c.createdAt) }}</div>
                 </div>

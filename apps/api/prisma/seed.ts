@@ -44,23 +44,36 @@ async function main() {
     }),
   ]);
 
-  // 4) Course
-  const course = await prisma.course.upsert({
-    where: { code_semester: { code: "DEMO.101", semester: "2026S" } },
-    update: { title: "Demo Course" },
-    create: {
-      code: "DEMO.101",
-      title: "Demo Course",
-      semester: "2026S",
-    },
-  });
+  // 4) Courses
+  const courseDefs = [
+    { code: "DEMO.101", title: "Demo Course" },
+    { code: "WEBDEV.201", title: "Web Development" },
+    { code: "PROG.301", title: "Programming" },
+    { code: "CYBER.401", title: "Cyber Security" },
+  ];
 
-  // 5) Enrollment
-  await prisma.enrollment.upsert({
-    where: { userId_courseId: { userId: user.id, courseId: course.id } },
-    update: {},
-    create: { userId: user.id, courseId: course.id, enrollmentRole: "STUDENT" },
-  });
+  const courses = await Promise.all(
+    courseDefs.map((c) =>
+      prisma.course.upsert({
+        where: { code_semester: { code: c.code, semester: "2026S" } },
+        update: { title: c.title },
+        create: { code: c.code, title: c.title, semester: "2026S" },
+      }),
+    ),
+  );
+
+  const course = courses[0]; // Demo Course (used for thread/comment below)
+
+  // 5) Enrollments
+  await Promise.all(
+    courses.map((c) =>
+      prisma.enrollment.upsert({
+        where: { userId_courseId: { userId: user.id, courseId: c.id } },
+        update: {},
+        create: { userId: user.id, courseId: c.id, enrollmentRole: "STUDENT" },
+      }),
+    ),
+  );
 
   // 6) Pseudonym (course-scoped)
   const pseudonym = await prisma.pseudonym.upsert({

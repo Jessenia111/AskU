@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import UiCard from "../components/UiCard.vue";
+import PseudonymBadge from "../components/PseudonymBadge.vue";
 import { apiFetch, ApiError } from "../api/client";
 import { useToast } from "../composables/useToast";
 import { useAuthStore } from "../stores/auth";
@@ -8,7 +9,7 @@ import { useAuthStore } from "../stores/auth";
 type ReportItem = {
   id: string;
   createdAt: string;
-  reporter: { publicName: string };
+  reporter: { pseudonymId: string; publicName: string };
   course: { id: string; code: string; title: string } | null;
   targetType: "THREAD" | "COMMENT";
   targetId: string;
@@ -158,7 +159,7 @@ onMounted(() => {
                 Course: <span class="font-medium text-slate-700">{{ r.course.code }} — {{ r.course.title }}</span>
               </span>
               <span v-else>Course: unknown</span>
-              &nbsp;·&nbsp; Reported by: <span class="font-medium text-slate-700">{{ r.reporter.publicName }}</span>
+              &nbsp;·&nbsp; Reported by: <PseudonymBadge :pseudonym-id="r.reporter.pseudonymId" :public-name="r.reporter.publicName" />
             </div>
 
             <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">

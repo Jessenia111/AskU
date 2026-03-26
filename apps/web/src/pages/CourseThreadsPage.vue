@@ -4,19 +4,20 @@ import { useRoute } from "vue-router";
 import { apiFetch, ApiError } from "../api/client";
 import UiCard from "../components/UiCard.vue";
 import ReportMenu from "../components/ReportMenu.vue";
+import PseudonymBadge from "../components/PseudonymBadge.vue";
 import { useToast } from "../composables/useToast";
 
 type ThreadListItem = {
   id: string;
   courseId: string;
-  author: { publicName: string };
+  author: { pseudonymId: string; publicName: string };
   title: string;
   bodyPreview: string;
   status: string;
   createdAt: string;
 };
 
-type ThreadsPage = { items: ThreadListItem[]; total: number; skip: number; take: number };
+type ThreadsPage = { courseTitle: string; items: ThreadListItem[]; total: number; skip: number; take: number };
 
 const route = useRoute();
 const courseId = computed(() => String(route.params.courseId));
@@ -32,6 +33,7 @@ const loadError = ref<string | null>(null);
 const createError = ref<string | null>(null);
 
 const myPseudonym = ref<string | null>(null);
+const courseName = ref<string | null>(null);
 
 const showNew = ref(false);
 const title = ref("");
@@ -67,6 +69,7 @@ async function load() {
     ]);
     threads.value = page.items;
     total.value = page.total;
+    courseName.value = page.courseTitle;
     myPseudonym.value = pseudonymData.publicName;
   } catch (e) {
     loadError.value = e instanceof ApiError ? e.message : String(e);
@@ -144,7 +147,10 @@ onMounted(load);
   <div>
     <div class="asku-subheader">
       <router-link class="asku-back" to="/courses">← Courses</router-link>
-      <div class="asku-section-title">Threads</div>
+      <div class="flex flex-col">
+        <div class="asku-section-title">Threads</div>
+        <div v-if="courseName" class="text-sm text-slate-500 -mt-1">{{ courseName }}</div>
+      </div>
       <div v-if="myPseudonym" class="ml-auto flex items-center gap-2 text-sm text-slate-500">
         You are
         <span class="rounded-lg bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700">
@@ -218,7 +224,8 @@ onMounted(load);
           </div>
 
           <div class="asku-meta">
-            {{ t.author.publicName }} · {{ t.status }}
+            <PseudonymBadge :pseudonym-id="t.author.pseudonymId" :public-name="t.author.publicName" />
+            · {{ t.status }}
           </div>
 
           <div class="asku-body">
