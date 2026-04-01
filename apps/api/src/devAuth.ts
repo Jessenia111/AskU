@@ -1,13 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "./prisma";
-import { generatePseudonymName } from "./nameGen";
+import { getOrRotatePseudonym } from "./pseudonym";
 
 export async function devAuth(req: Request, _res: Response, next: NextFunction) {
   // Only inject dev user if there is no real session already
   if (req.user) return next();
   const utSubject = "dev-user-1";
   const user = await prisma.user.findUnique({ where: { utSubject } });
-  if (user) req.user = { id: user.id, email: user.email };
+  if (user) req.user = { id: user.id, email: user.email, displayMode: user.displayMode, createdAt: user.createdAt };
   next();
 }
 
@@ -15,22 +15,12 @@ export async function attachCoursePseudonym(req: Request, _res: Response, next: 
   const courseId = req.params.courseId;
   if (!req.user || !courseId) return next();
 
-  let pseudonym = await prisma.pseudonym.findUnique({
-    where: { userId_courseId: { userId: req.user.id, courseId } },
-  });
-
-  if (!pseudonym) {
-    let attempts = 0;
-    while (!pseudonym && attempts < 5) {
-      try {
-        pseudonym = await prisma.pseudonym.create({
-          data: { userId: req.user.id, courseId, publicName: generatePseudonymName() },
-        });
-      } catch {
-        attempts++;
-      }
-    }
-  }
+  const pseudonym = await getOrRotatePseudonym(
+    req.user.id,
+    courseId,
+    req.user.email,
+    req.user.displayMode ?? null,
+  );
 
   if (pseudonym) req.pseudonym = pseudonym;
   next();

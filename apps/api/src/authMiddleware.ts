@@ -11,7 +11,7 @@ export async function attachAuth(req: Request, res: Response, next: NextFunction
   try {
     const session = await prisma.session.findUnique({
       where: { tokenHash },
-      include: { user: { select: { id: true, email: true } } },
+      include: { user: { select: { id: true, email: true, displayMode: true, createdAt: true } } },
     });
 
     if (!session) return next();

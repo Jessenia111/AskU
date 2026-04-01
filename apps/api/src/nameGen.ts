@@ -20,3 +20,14 @@ export function generatePseudonymName(): string {
   const num = crypto.randomInt(100, 1000);
   return `${adj}${noun}${num}`;
 }
+
+/** Derives a display name from an email address.
+ *  e.g. jessenia.tsenkman@ut.ee  →  "Jessenia Tsenkman"
+ *       john@ut.ee               →  "John"
+ */
+export function deriveRealName(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+  const parts = local.split(".").filter(Boolean).slice(0, 2);
+  return parts.map(capitalize).join(" ") || local;
+}

@@ -24,6 +24,8 @@ type ThreadDto = {
     createdAt: string;
     author: { pseudonymId: string; publicName: string };
     isMine: boolean;
+    likeCount: number;
+    iLiked: boolean;
   }>;
 };
 
@@ -44,6 +46,7 @@ const reportingKey = ref<string | null>(null);
 const reportedIds = ref<Set<string>>(new Set());
 
 const actingKey = ref<string | null>(null);
+const likingId = ref<string | null>(null);
 
 const pendingDelete = ref<{ type: "thread"; id: string } | { type: "comment"; id: string } | null>(null);
 // Separate pending state for moderator DELETE (uses moderation/actions API)
@@ -88,6 +91,44 @@ async function postComment() {
     toast.push("error", e instanceof ApiError ? e.message : "Failed to post comment");
   } finally {
     posting.value = false;
+  }
+}
+
+const commentTextarea = ref<HTMLTextAreaElement | null>(null);
+
+function replyTo(publicName: string) {
+  const mention = `@${publicName} `;
+  if (!commentBody.value.includes(mention)) {
+    commentBody.value = mention + commentBody.value;
+  }
+  commentTextarea.value?.focus();
+  window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+}
+
+async function toggleLike(commentId: string) {
+  if (!auth.isLoggedIn) {
+    toast.push("error", "You need to be logged in to react.");
+    return;
+  }
+  if (likingId.value) return;
+  likingId.value = commentId;
+  try {
+    const result = await apiFetch<{ liked: boolean; count: number }>(
+      `/api/v1/comments/${commentId}/reactions`,
+      { method: "POST", body: JSON.stringify({ type: "LIKE" }) },
+    );
+    // Update in-place without full reload for snappy UX
+    if (thread.value) {
+      const c = thread.value.comments.find((x) => x.id === commentId);
+      if (c) {
+        c.iLiked = result.liked;
+        c.likeCount = result.count;
+      }
+    }
+  } catch (e) {
+    toast.push("error", e instanceof ApiError ? e.message : "Failed to react");
+  } finally {
+    likingId.value = null;
   }
 }
 
@@ -324,39 +365,66 @@ onMounted(load);
                   {{ c.body }}
                 </div>
 
-                <div class="flex items-center justify-end gap-2 mt-4">
-                  <ReportMenu
-                    :disabled="reportingKey === c.id"
-                    :reported="reportedIds.has(c.id)"
-                    @select="(reason) => submitReport('COMMENT', c.id, reason)"
-                  />
-
-                  <!-- Author delete — only when no mod tools -->
-                  <button
-                    v-if="c.isMine && !hasMod"
-                    class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500"
-                    @click="confirmDeleteComment(c.id)"
-                  >
-                    Delete
-                  </button>
-
-                  <!-- Mod tools -->
-                  <template v-if="hasMod">
+                <div class="flex items-center justify-between mt-4">
+                  <!-- Left: like + reply -->
+                  <div class="flex items-center gap-2">
+                    <!-- Like button -->
                     <button
-                      class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                      :disabled="!!actingKey"
-                      @click="modAct('COMMENT', c.id, 'HIDE')"
+                      class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60"
+                      :class="c.iLiked
+                        ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'"
+                      :disabled="likingId === c.id"
+                      :title="c.iLiked ? 'Remove like' : 'Like this comment'"
+                      @click="toggleLike(c.id)"
                     >
-                      {{ actingKey === `HIDE:COMMENT:${c.id}` ? "Working..." : "Hide" }}
+                      {{ c.iLiked ? 'Liked' : 'Like' }}<template v-if="c.likeCount > 0"> · {{ c.likeCount }}</template>
                     </button>
+
+                    <!-- Reply button -->
                     <button
-                      class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500 disabled:opacity-60"
-                      :disabled="!!actingKey"
-                      @click="modAct('COMMENT', c.id, 'DELETE')"
+                      class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                      @click="replyTo(c.author.publicName)"
                     >
-                      {{ actingKey === `DELETE:COMMENT:${c.id}` ? "Working..." : "Delete" }}
+                      Reply
                     </button>
-                  </template>
+                  </div>
+
+                  <!-- Right: report + mod/delete actions -->
+                  <div class="flex items-center gap-2">
+                    <ReportMenu
+                      :disabled="reportingKey === c.id"
+                      :reported="reportedIds.has(c.id)"
+                      @select="(reason) => submitReport('COMMENT', c.id, reason)"
+                    />
+
+                    <!-- Author delete — only when no mod tools -->
+                    <button
+                      v-if="c.isMine && !hasMod"
+                      class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500"
+                      @click="confirmDeleteComment(c.id)"
+                    >
+                      Delete
+                    </button>
+
+                    <!-- Mod tools -->
+                    <template v-if="hasMod">
+                      <button
+                        class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        :disabled="!!actingKey"
+                        @click="modAct('COMMENT', c.id, 'HIDE')"
+                      >
+                        {{ actingKey === `HIDE:COMMENT:${c.id}` ? "Working..." : "Hide" }}
+                      </button>
+                      <button
+                        class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500 disabled:opacity-60"
+                        :disabled="!!actingKey"
+                        @click="modAct('COMMENT', c.id, 'DELETE')"
+                      >
+                        {{ actingKey === `DELETE:COMMENT:${c.id}` ? "Working..." : "Delete" }}
+                      </button>
+                    </template>
+                  </div>
                 </div>
               </div>
             </UiCard>
@@ -369,10 +437,11 @@ onMounted(load);
           <div class="text-xl font-semibold mb-3">Write a comment</div>
 
           <textarea
+            ref="commentTextarea"
             v-model="commentBody"
             class="asku-textarea"
             rows="4"
-            placeholder="Write a comment…"
+            placeholder="Write a comment… (use ↩ Reply to @mention someone)"
           />
 
           <div class="flex justify-end mt-3">

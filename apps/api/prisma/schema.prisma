@@ -73,11 +73,13 @@ model Enrollment {
 }
 
 model Pseudonym {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   userId     String
   courseId   String
   publicName String
-  createdAt  DateTime @default(now())
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
@@ -85,9 +87,8 @@ model Pseudonym {
   threads  Thread[]
   comments Comment[]
   reports  Report[]
-
-  @@unique([userId, courseId])
-  @@unique([courseId, publicName])
+  // No unique constraints: a user can have multiple pseudonyms per course (old ones are archived).
+  // Uniqueness among ACTIVE pseudonyms is enforced in application code.
 }
 
 model Thread {
@@ -114,8 +115,22 @@ model Comment {
   isHidden          Boolean  @default(false)
   createdAt         DateTime @default(now())
 
-  thread Thread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  author Pseudonym @relation(fields: [authorPseudonymId], references: [id])
+  thread    Thread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    Pseudonym  @relation(fields: [authorPseudonymId], references: [id])
+  reactions Reaction[]
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  userId    String
+  commentId String
+  type      String   @default("LIKE")
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId, type])
 }
 
 model Report {
@@ -166,12 +181,14 @@ model User {
   email           String    @unique
   emailVerifiedAt DateTime?
   createdAt       DateTime  @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt       DateTime  @default(now()) @updatedAt
+  displayMode     String?   // null = not chosen yet, "ANONYMOUS" = random pseudonym, "REAL_NAME" = name from email
 
-  sessions        Session[]
-  pseudonyms      Pseudonym[]
+  sessions    Session[]
+  pseudonyms  Pseudonym[]
+  reactions   Reaction[]
 
-  utSubject String   @unique
+  utSubject   String             @unique
   roles       UserRole[]
   enrollments Enrollment[]
   modActions  ModerationAction[]

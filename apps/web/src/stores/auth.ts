@@ -2,7 +2,12 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { apiFetch } from "../api/client";
 
-type Me = { id: string; email: string; isModerator: boolean };
+type Me = {
+  id: string;
+  email: string;
+  isModerator: boolean;
+  displayMode: string | null;
+};
 
 export const useAuthStore = defineStore("auth", () => {
   const user = ref<Me | null>(null);
@@ -11,6 +16,7 @@ export const useAuthStore = defineStore("auth", () => {
 
   const isLoggedIn = computed(() => !!user.value);
   const isModerator = computed(() => user.value?.isModerator ?? false);
+  const displayMode = computed(() => user.value?.displayMode ?? null);
   const initials = computed(() => {
     if (!user.value?.email) return "U";
     return user.value.email.charAt(0).toUpperCase();
@@ -44,5 +50,5 @@ export const useAuthStore = defineStore("auth", () => {
     checked.value = false;
   }
 
-  return { user, loading, checked, isLoggedIn, isModerator, initials, fetchMe, refresh, clear };
+  return { user, loading, checked, isLoggedIn, isModerator, displayMode, initials, fetchMe, refresh, clear };
 });

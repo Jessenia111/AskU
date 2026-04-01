@@ -8,12 +8,16 @@ import { useAuthStore } from "./stores/auth";
 
 const REDIRECT_KEY = "asku_login_redirect";
 
+// Routes that do not require authentication
+const PUBLIC_PATHS = ["/login", "/verify", "/info"];
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/", redirect: "/courses" },
     { path: "/login", component: LoginPage },
     { path: "/verify", component: VerifyPage },
+    { path: "/info", component: () => import("./pages/InfoPage.vue") },
     { path: "/courses", component: CoursesPage },
     { path: "/courses/:courseId", component: CourseThreadsPage },
     { path: "/threads/:threadId", component: ThreadPage },
@@ -27,13 +31,15 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
 
-  // Public routes — check if already logged in and redirect away from login/verify
-  if (to.path === "/login" || to.path === "/verify") {
-    const loggedIn = await auth.fetchMe();
-    if (loggedIn) {
-      const redirect = sessionStorage.getItem(REDIRECT_KEY) ?? "/courses";
-      sessionStorage.removeItem(REDIRECT_KEY);
-      return { path: redirect };
+  if (PUBLIC_PATHS.includes(to.path)) {
+    // For login/verify: redirect away if already logged in
+    if (to.path === "/login" || to.path === "/verify") {
+      const loggedIn = await auth.fetchMe();
+      if (loggedIn) {
+        const redirect = sessionStorage.getItem(REDIRECT_KEY) ?? "/courses";
+        sessionStorage.removeItem(REDIRECT_KEY);
+        return { path: redirect };
+      }
     }
     return true;
   }

@@ -50,6 +50,7 @@ function go(path: string) {
         <button class="asku-menu-item" @click="go('/courses')">Courses</button>
         <button class="asku-menu-item" @click="go('/profile')">My Profile</button>
         <button class="asku-menu-item" @click="go('/moderation')">Moderation</button>
+        <button class="asku-menu-item" @click="go('/info')">Rules & Info</button>
         <button v-if="isDev" class="asku-menu-item" @click="go('/dev')">Dev Tools</button>
         <div class="asku-menu-sep"></div>
         <button class="asku-menu-item danger" @click="logout">Logout</button>

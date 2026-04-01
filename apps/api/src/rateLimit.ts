@@ -30,6 +30,32 @@ function cleanup(bucket: Bucket) {
   bucket.hits = bucket.hits.filter((t) => t > cutoff);
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+const NEW_ACCOUNT_WINDOW_MS = 24 * HOUR_MS;
+
+/**
+ * Returns a middleware that applies a tighter rate limit for accounts younger
+ * than 24 hours (new_max), falling through to the normal limit otherwise.
+ * Both limits use the same in-memory bucket store as `rateLimit`.
+ */
+export function newAccountRateLimit(
+  action: string,
+  windowMs: number,
+  normalMax: number,
+  newMax: number,
+) {
+  const normalLimit = rateLimit(action, windowMs, normalMax);
+  const tightLimit = rateLimit(`${action}_new`, windowMs, newMax);
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const createdAt = req.user?.createdAt;
+    if (createdAt && now() - createdAt.getTime() < NEW_ACCOUNT_WINDOW_MS) {
+      return tightLimit(req, res, next);
+    }
+    return normalLimit(req, res, next);
+  };
+}
+
 /**
  * @param byIp – pass `true` for endpoints that run before auth (login/verify).
  *               Uses req.ip so every visitor gets their own bucket instead of

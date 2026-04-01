@@ -63,6 +63,11 @@
 
           <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
         </form>
+
+        <p class="mt-5 text-xs text-center text-zinc-400">
+          By logging in you agree to the
+          <router-link to="/info" class="underline text-zinc-500 hover:text-zinc-800">community rules</router-link>.
+        </p>
       </template>
 
     </div>
