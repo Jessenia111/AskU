@@ -183,10 +183,11 @@ app.post(
   // delete used code
   await prisma.authCode.deleteMany({ where: { email } });
 
+  const isProduction = process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true";
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production" || process.env.COOKIE_SECURE === "true",
+    sameSite: isProduction ? "none" : "lax",
+    secure: isProduction,
     maxAge: 14 * 24 * 60 * 60 * 1000,
   });
 
