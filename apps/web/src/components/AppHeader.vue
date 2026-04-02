@@ -41,8 +41,8 @@ function go(path: string) {
       </div>
     </div>
 
-    <div ref="menuRef" class="asku-header-right">
-      <div v-if="auth.user" class="asku-me">{{ auth.user.email }}</div>
+    <div v-if="auth.user" ref="menuRef" class="asku-header-right">
+      <div class="asku-me">{{ auth.user.email }}</div>
 
       <button class="asku-menu-btn" @click="open = !open">≡</button>
 

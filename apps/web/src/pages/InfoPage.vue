@@ -204,10 +204,22 @@
       <span class="text-xs mt-1 block">Rules may be updated during the pilot study. Last updated: April 2026.</span>
     </div>
 
+    <!-- Login CTA — only shown when not logged in -->
+    <div v-if="!auth.user" class="mt-8 text-center">
+      <router-link
+        to="/login"
+        class="inline-block rounded-xl bg-blue-600 px-8 py-3 text-white font-semibold text-sm hover:bg-blue-700 transition-colors no-underline"
+      >
+        Log in to AskU
+      </router-link>
+    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
+import { useAuthStore } from "../stores/auth";
+const auth = useAuthStore();
 const forbiddenRules = [
   {
     title: "Threats and harassment",

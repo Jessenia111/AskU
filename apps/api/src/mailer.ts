@@ -1,68 +1,22 @@
 import "dotenv/config";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 function getEnv(name: string) {
   return (process.env[name] ?? "").trim();
 }
 
 export function smtpConfigured() {
-  return (
-    !!getEnv("SMTP_HOST") &&
-    !!getEnv("SMTP_PORT") &&
-    !!getEnv("SMTP_USER") &&
-    !!getEnv("SMTP_PASS") &&
-    !!getEnv("SMTP_FROM")
-  );
-}
-
-let cachedTransporter: nodemailer.Transporter | null = null;
-
-function createTransporter() {
-  const host = getEnv("SMTP_HOST");
-  const port = Number(getEnv("SMTP_PORT"));
-  const user = getEnv("SMTP_USER");
-  const pass = getEnv("SMTP_PASS");
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,   // true for 465 (SSL), false for 587 (STARTTLS)
-    requireTLS: port === 587,
-    auth: { user, pass, type: "LOGIN" },
-  });
-}
-
-async function getTransporter() {
-  if (!cachedTransporter) {
-    cachedTransporter = createTransporter();
-
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[SMTP] configured:", smtpConfigured());
-      console.log("[SMTP] host:", getEnv("SMTP_HOST"));
-      console.log("[SMTP] port:", getEnv("SMTP_PORT"));
-      console.log("[SMTP] user:", getEnv("SMTP_USER") ? "***set***" : "***missing***");
-      console.log("[SMTP] from:", getEnv("SMTP_FROM"));
-    }
-
-    // Quick connection/auth check — if it fails, don't cache the broken transporter
-    try {
-      await cachedTransporter.verify();
-    } catch (err) {
-      cachedTransporter = null;
-      throw err;
-    }
-  }
-
-  return cachedTransporter;
+  return !!getEnv("RESEND_API_KEY");
 }
 
 export async function sendVerificationCodeEmail(to: string, code: string) {
-  const from = getEnv("SMTP_FROM");
+  const apiKey = getEnv("RESEND_API_KEY");
+  const from = getEnv("RESEND_FROM") || "AskU <onboarding@resend.dev>";
   const appName = getEnv("APP_NAME") || "AskU";
 
-  const transporter = await getTransporter();
+  const resend = new Resend(apiKey);
 
-  await transporter.sendMail({
+  const { error } = await resend.emails.send({
     from,
     to,
     subject: `${appName}: your verification code`,
@@ -76,4 +30,6 @@ export async function sendVerificationCodeEmail(to: string, code: string) {
       </div>
     `,
   });
+
+  if (error) throw new Error(error.message);
 }
