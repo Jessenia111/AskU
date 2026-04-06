@@ -1,6 +1,9 @@
 import { useAuthStore } from "../stores/auth";
 
-const API_BASE: string = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+// Empty string means "use relative URLs" — Vercel proxy (vercel.json) handles forwarding to Railway.
+// Fallback to localhost only when the variable is completely absent (local dev without .env).
+const _rawBase = import.meta.env.VITE_API_BASE;
+const API_BASE: string = _rawBase !== undefined ? _rawBase : "http://localhost:8000";
 
 export class ApiError extends Error {
   constructor(
