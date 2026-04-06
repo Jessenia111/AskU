@@ -25,10 +25,28 @@ export default async function handler(req: Request): Promise<Response> {
     duplex: hasBody ? "half" : undefined,
   });
 
-  // Forward all response headers (including Set-Cookie)
-  const responseHeaders = new Headers(proxyResponse.headers);
-  // Remove headers that Vercel Edge shouldn't forward
-  responseHeaders.delete("transfer-encoding");
+  // Build response headers manually so Set-Cookie is not lost.
+  // The Headers API silently drops Set-Cookie on iteration in some runtimes,
+  // so we use getSetCookie() which is designed specifically for this.
+  const responseHeaders = new Headers();
+
+  for (const [key, value] of proxyResponse.headers.entries()) {
+    const lower = key.toLowerCase();
+    if (lower === "transfer-encoding" || lower === "set-cookie") continue;
+    responseHeaders.append(key, value);
+  }
+
+  // Forward every Set-Cookie header individually
+  const cookies: string[] =
+    typeof (proxyResponse.headers as any).getSetCookie === "function"
+      ? (proxyResponse.headers as any).getSetCookie()
+      : proxyResponse.headers.get("set-cookie")
+        ? [proxyResponse.headers.get("set-cookie") as string]
+        : [];
+
+  for (const cookie of cookies) {
+    responseHeaders.append("set-cookie", cookie);
+  }
 
   return new Response(proxyResponse.body, {
     status: proxyResponse.status,
