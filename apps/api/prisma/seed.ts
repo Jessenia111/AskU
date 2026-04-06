@@ -76,34 +76,36 @@ async function main() {
   );
 
   // 6) Pseudonym (course-scoped)
-  const pseudonym = await prisma.pseudonym.upsert({
-    where: { userId_courseId: { userId: user.id, courseId: course.id } },
-    update: {},
-    create: {
-      userId: user.id,
-      courseId: course.id,
-      publicName: "Anonymous #101",
-    },
+  let pseudonym = await prisma.pseudonym.findFirst({
+    where: { userId: user.id, courseId: course.id, isActive: true },
   });
+  if (!pseudonym) {
+    pseudonym = await prisma.pseudonym.create({
+      data: { userId: user.id, courseId: course.id, publicName: "Anonymous #101" },
+    });
+  }
 
-  // 7) Thread
-  const thread = await prisma.thread.create({
-    data: {
-      courseId: course.id,
-      authorPseudonymId: pseudonym.id,
-      title: "How does verified anonymity work?",
-      body: "Can someone explain how AskU keeps anonymity but still stays safe?",
-    },
-  });
+  // 7) Thread (only create if none exist for this course)
+  let thread = await prisma.thread.findFirst({ where: { courseId: course.id } });
+  if (!thread) {
+    thread = await prisma.thread.create({
+      data: {
+        courseId: course.id,
+        authorPseudonymId: pseudonym.id,
+        title: "How does verified anonymity work?",
+        body: "Can someone explain how AskU keeps anonymity but still stays safe?",
+      },
+    });
 
-  // 8) Comment
-  await prisma.comment.create({
-    data: {
-      threadId: thread.id,
-      authorPseudonymId: pseudonym.id,
-      body: "Verified anonymity means UT knows who you are, but students only see a pseudonym.",
-    },
-  });
+    // 8) Comment
+    await prisma.comment.create({
+      data: {
+        threadId: thread.id,
+        authorPseudonymId: pseudonym.id,
+        body: "Verified anonymity means UT knows who you are, but students only see a pseudonym.",
+      },
+    });
+  }
 
   console.log("Seed completed:");
   console.log({ userId: user.id, courseId: course.id, pseudonymId: pseudonym.id, threadId: thread.id });

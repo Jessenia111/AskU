@@ -508,7 +508,7 @@ onMounted(() => {
                       Moderator
                     </span>
                     <span class="text-xs text-slate-400">
-                      {{ u.displayMode === 'REAL_NAME' ? '👤 Real name' : '🎭 Anonymous' }}
+                      {{ u.displayMode === 'REAL_NAME' ? 'Real name' : 'Anonymous' }}
                     </span>
                     <span class="text-xs text-slate-400">Joined {{ fmtDate(u.createdAt) }}</span>
                   </div>
