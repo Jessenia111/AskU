@@ -12,14 +12,19 @@ export function smtpConfigured() {
 export async function sendVerificationCodeEmail(to: string, code: string) {
   const appName = getEnv("APP_NAME") || "AskU";
 
+  const port = parseInt(getEnv("SMTP_PORT") || "587", 10);
   const transporter = nodemailer.createTransport({
     host: getEnv("SMTP_HOST"),
-    port: parseInt(getEnv("SMTP_PORT") || "587", 10),
-    secure: false,
+    port,
+    secure: port === 465,
+    family: 4, // force IPv4 — Railway does not support IPv6 outbound
     auth: {
       user: getEnv("SMTP_USER"),
       pass: getEnv("SMTP_PASS"),
     },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
   });
 
   const from = getEnv("SMTP_FROM") || `${appName} <${getEnv("SMTP_USER")}>`;
