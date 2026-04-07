@@ -1,6 +1,6 @@
 import "dotenv/config";
 import nodemailer from "nodemailer";
-import type { TransportOptions } from "nodemailer";
+import dns from "dns";
 
 function getEnv(name: string) {
   return (process.env[name] ?? "").trim();
@@ -10,25 +10,40 @@ export function smtpConfigured() {
   return !!(getEnv("SMTP_HOST") && getEnv("SMTP_USER") && getEnv("SMTP_PASS"));
 }
 
+// Resolve hostname to an IPv4 address to work around Railway's IPv6-only DNS
+function resolveIPv4(hostname: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    dns.resolve4(hostname, (err, addresses) => {
+      if (err) reject(err);
+      else resolve(addresses[0]);
+    });
+  });
+}
+
 export async function sendVerificationCodeEmail(to: string, code: string) {
   const appName = getEnv("APP_NAME") || "AskU";
   const port = parseInt(getEnv("SMTP_PORT") || "587", 10);
+  const smtpHost = getEnv("SMTP_HOST");
 
-  const transportOptions = {
-    host: getEnv("SMTP_HOST"),
+  // Resolve to IPv4 first so nodemailer never tries IPv6
+  const smtpIp = await resolveIPv4(smtpHost);
+
+  const transporter = nodemailer.createTransport({
+    host: smtpIp,
     port,
     secure: port === 465,
-    family: 4, // force IPv4 — Railway does not route IPv6 outbound
     auth: {
       user: getEnv("SMTP_USER"),
       pass: getEnv("SMTP_PASS"),
     },
+    tls: {
+      servername: smtpHost, // keep TLS verification against the real hostname
+    },
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 15000,
-  } as TransportOptions;
+  } as nodemailer.TransportOptions);
 
-  const transporter = nodemailer.createTransport(transportOptions);
   const from = getEnv("SMTP_FROM") || `${appName} <${getEnv("SMTP_USER")}>`;
 
   const info = await transporter.sendMail({
