@@ -1,22 +1,30 @@
 import "dotenv/config";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 function getEnv(name: string) {
   return (process.env[name] ?? "").trim();
 }
 
 export function smtpConfigured() {
-  return !!getEnv("RESEND_API_KEY");
+  return !!(getEnv("SMTP_HOST") && getEnv("SMTP_USER") && getEnv("SMTP_PASS"));
 }
 
 export async function sendVerificationCodeEmail(to: string, code: string) {
-  const apiKey = getEnv("RESEND_API_KEY");
-  const from = getEnv("RESEND_FROM") || "AskU <onboarding@resend.dev>";
   const appName = getEnv("APP_NAME") || "AskU";
 
-  const resend = new Resend(apiKey);
+  const transporter = nodemailer.createTransport({
+    host: getEnv("SMTP_HOST"),
+    port: parseInt(getEnv("SMTP_PORT") || "587", 10),
+    secure: false,
+    auth: {
+      user: getEnv("SMTP_USER"),
+      pass: getEnv("SMTP_PASS"),
+    },
+  });
 
-  const { error } = await resend.emails.send({
+  const from = getEnv("SMTP_FROM") || `${appName} <${getEnv("SMTP_USER")}>`;
+
+  const info = await transporter.sendMail({
     from,
     to,
     subject: `${appName}: your verification code`,
@@ -31,5 +39,5 @@ export async function sendVerificationCodeEmail(to: string, code: string) {
     `,
   });
 
-  if (error) throw new Error(error.message);
+  if (!info.messageId) throw new Error("Failed to send email");
 }
