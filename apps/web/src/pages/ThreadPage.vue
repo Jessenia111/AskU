@@ -84,12 +84,12 @@ function lightboxNext() {
 let touchStartX = 0;
 let touchStartY = 0;
 function onTouchStart(e: TouchEvent) {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
+  touchStartX = e.touches[0]?.clientX ?? 0;
+  touchStartY = e.touches[0]?.clientY ?? 0;
 }
 function onTouchEnd(e: TouchEvent) {
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
+  const dx = (e.changedTouches[0]?.clientX ?? touchStartX) - touchStartX;
+  const dy = (e.changedTouches[0]?.clientY ?? touchStartY) - touchStartY;
   // only count as horizontal swipe (not a vertical scroll attempt)
   if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
     dx < 0 ? lightboxNext() : lightboxPrev();
@@ -575,7 +575,7 @@ onUnmounted(() => {
       >
         <img
           :src="lightboxSrc"
-          :key="lightboxIndex"
+          :key="lightboxIndex ?? 0"
           alt="full size"
           class="max-h-full max-w-full object-contain rounded-xl pointer-events-none"
         />
