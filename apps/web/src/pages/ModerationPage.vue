@@ -39,7 +39,7 @@ type UserItem = {
 const toast = useToast();
 const auth = useAuthStore();
 
-type Tab = "reports" | "courses" | "users";
+type Tab = "reports" | "courses" | "users" | "audit";
 const activeTab = ref<Tab>("reports");
 
 // Reports
@@ -62,6 +62,20 @@ const pendingDeleteCourse = ref<Course | null>(null);
 // Users
 const loadingUsers = ref(false);
 const errorUsers = ref<string | null>(null);
+
+// Audit Log
+type AuditEntry = {
+  id: string;
+  createdAt: string;
+  actorEmail: string;
+  eventType: string;
+  entityType: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+};
+const loadingAudit = ref(false);
+const errorAudit = ref<string | null>(null);
+const auditEntries = ref<AuditEntry[]>([]);
 const users = ref<UserItem[]>([]);
 const pendingDeleteUser = ref<UserItem | null>(null);
 const actingUser = ref<string | null>(null);
@@ -245,6 +259,59 @@ async function toggleModerator(u: UserItem) {
   }
 }
 
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+async function loadAuditLog() {
+  loadingAudit.value = true;
+  errorAudit.value = null;
+  try {
+    auditEntries.value = await apiFetch<AuditEntry[]>("/api/v1/moderation/audit-log");
+  } catch (e) {
+    errorAudit.value = e instanceof ApiError ? e.message : String(e);
+  } finally {
+    loadingAudit.value = false;
+  }
+}
+
+function describeEntry(entry: AuditEntry): { label: string; detail: string; color: string } {
+  const meta = entry.metadata as Record<string, string> | null;
+  const entity = entry.entityType ?? "";
+
+  switch (entry.eventType) {
+    case "MOD_ACTION": {
+      const action = meta?.actionType === "DELETE" ? "Deleted" : "Hidden";
+      const target = entity === "THREAD" ? "thread" : "comment";
+      return {
+        label: `${action} ${target}`,
+        detail: meta?.reportId ? `Via report` : `Direct action`,
+        color: meta?.actionType === "DELETE" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700",
+      };
+    }
+    case "MOD_DISMISS":
+      return { label: "Report dismissed", detail: `${entity}`, color: "bg-slate-100 text-slate-600" };
+    case "REPORT_CREATED":
+      return {
+        label: "Report submitted",
+        detail: `Reason: ${meta?.reason ?? "unknown"} · ${entity}`,
+        color: "bg-yellow-100 text-yellow-700",
+      };
+    case "COURSE_CREATED":
+      return { label: "Course created", detail: meta?.code ? `${meta.code} — ${meta.title ?? ""}` : "", color: "bg-green-100 text-green-700" };
+    case "COURSE_DELETED":
+      return { label: "Course deleted", detail: meta?.code ? `${meta.code} — ${meta.title ?? ""}` : "", color: "bg-red-100 text-red-700" };
+    case "USER_DELETED":
+      return { label: "User deleted", detail: meta?.email ?? "", color: "bg-red-100 text-red-700" };
+    case "THREAD_HIDDEN_BY_AUTHOR":
+      return { label: "Thread hidden by author", detail: "", color: "bg-slate-100 text-slate-600" };
+    case "COMMENT_HIDDEN_BY_AUTHOR":
+      return { label: "Comment hidden by author", detail: "", color: "bg-slate-100 text-slate-600" };
+    case "IDENTITY_LOOKUP":
+      return { label: "Identity lookup", detail: "Moderator revealed identity behind a pseudonym", color: "bg-purple-100 text-purple-700" };
+    default:
+      return { label: entry.eventType.replace(/_/g, " ").toLowerCase(), detail: "", color: "bg-slate-100 text-slate-600" };
+  }
+}
+
 // ─── Tab switching ────────────────────────────────────────────────────────────
 
 function switchTab(tab: Tab) {
@@ -252,6 +319,7 @@ function switchTab(tab: Tab) {
   if (tab === "reports" && reports.value.length === 0) loadReports();
   if (tab === "courses" && courses.value.length === 0) loadCourses();
   if (tab === "users" && users.value.length === 0) loadUsers();
+  if (tab === "audit" && auditEntries.value.length === 0) loadAuditLog();
 }
 
 onMounted(() => {
@@ -305,7 +373,7 @@ onMounted(() => {
       <!-- Tabs -->
       <div class="flex gap-1 mt-4 border-b border-slate-200">
         <button
-          v-for="tab in (['reports', 'courses', 'users'] as const)"
+          v-for="tab in (['reports', 'courses', 'users', 'audit'] as const)"
           :key="tab"
           class="px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors capitalize"
           :class="activeTab === tab
@@ -313,7 +381,7 @@ onMounted(() => {
             : 'text-slate-500 hover:text-slate-800'"
           @click="switchTab(tab)"
         >
-          {{ tab === 'reports' ? `Reports${reports.length ? ` (${reports.length})` : ''}` : tab.charAt(0).toUpperCase() + tab.slice(1) }}
+          {{ tab === 'reports' ? `Reports${reports.length ? ` (${reports.length})` : ''}` : tab === 'audit' ? 'Audit Log' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
         </button>
       </div>
 
@@ -540,6 +608,43 @@ onMounted(() => {
 
         <div v-if="!loadingUsers && users.length === 0 && !errorUsers" class="asku-muted">
           No users found.
+        </div>
+      </div>
+
+      <!-- ── Audit Log tab ───────────────────────────────────────────────── -->
+      <div v-if="activeTab === 'audit'" class="mt-4">
+        <div v-if="loadingAudit" class="asku-muted">Loading…</div>
+        <div v-if="errorAudit" class="asku-error">{{ errorAudit }}</div>
+
+        <div v-if="!loadingAudit && !errorAudit && auditEntries.length === 0" class="asku-muted">
+          No audit log entries yet.
+        </div>
+
+        <div v-if="!loadingAudit && auditEntries.length > 0" class="flex flex-col gap-2">
+          <div class="text-sm text-slate-500 font-medium mb-2">
+            {{ auditEntries.length }} entr{{ auditEntries.length === 1 ? 'y' : 'ies' }} (last 200)
+          </div>
+          <UiCard v-for="entry in auditEntries" :key="entry.id" :topbar="false">
+            <div class="asku-card-pad flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span
+                    class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold"
+                    :class="describeEntry(entry).color"
+                  >
+                    {{ describeEntry(entry).label }}
+                  </span>
+                </div>
+                <div v-if="describeEntry(entry).detail" class="mt-1 text-sm text-slate-500">
+                  {{ describeEntry(entry).detail }}
+                </div>
+                <div class="mt-1.5 text-xs text-slate-400">
+                  By: <span class="font-mono font-medium text-slate-700">{{ entry.actorEmail }}</span>
+                </div>
+              </div>
+              <div class="asku-date shrink-0">{{ fmt(entry.createdAt) }}</div>
+            </div>
+          </UiCard>
         </div>
       </div>
     </div>

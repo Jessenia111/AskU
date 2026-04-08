@@ -31,7 +31,6 @@ onMounted(load);
     <div v-if="error" class="asku-error">{{ error }}</div>
 
     <div v-if="!loading && !error && courses.length === 0" class="flex flex-col items-center gap-3 py-16 text-center">
-      <div class="text-4xl">📚</div>
       <div class="text-lg font-semibold text-slate-700">No courses yet</div>
       <div class="text-sm text-slate-400">Courses will appear here once they are added.</div>
     </div>

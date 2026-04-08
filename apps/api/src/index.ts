@@ -993,6 +993,26 @@ app.post("/api/v1/dev/make-moderator", requireAuth, asyncHandler(async (req, res
   res.json({ ok: true, message: "Moderator role granted" });
 }));
 
+// GET /api/v1/moderation/audit-log
+app.get("/api/v1/moderation/audit-log", requireAuth, requireModerator, asyncHandler(async (_req, res) => {
+  const entries = await prisma.auditLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    include: { actor: { select: { email: true } } },
+  });
+  res.json(
+    entries.map((e) => ({
+      id: e.id,
+      createdAt: e.createdAt,
+      actorEmail: e.actor.email,
+      eventType: e.eventType,
+      entityType: e.entityType,
+      entityId: e.entityId,
+      metadata: e.metadataJson,
+    }))
+  );
+}));
+
 // Global error handler — catches any error passed via next(err) or thrown in asyncHandler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("[UNHANDLED ERROR]", err);
