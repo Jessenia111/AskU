@@ -36,10 +36,15 @@ cleanupExpiredSessions().catch((e) => {
 });
 
 const app = express();
+app.set("etag", false);
 app.use(cors({
   origin: process.env.CORS_ORIGIN || "http://localhost:5173",
   credentials: true,
 }));
+app.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
 app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 app.use(attachAuth);
