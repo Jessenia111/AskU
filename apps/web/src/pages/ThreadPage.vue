@@ -582,7 +582,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Prev / Next buttons -->
-      <div v-if="allImages.length > 1" class="flex justify-between px-4 py-4 shrink-0 gap-3">
+      <div v-if="allImages.length > 1" class="flex justify-between px-4 shrink-0 gap-3" style="padding-top: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom))">
         <button
           class="flex-1 rounded-xl bg-white/15 py-3 text-white text-sm font-medium active:bg-white/30"
           @click="lightboxPrev"
@@ -605,7 +605,7 @@ onUnmounted(() => {
           Next →
         </button>
       </div>
-      <div v-else class="pb-6" />
+      <div v-else style="padding-bottom: max(24px, env(safe-area-inset-bottom))" />
     </div>
   </Teleport>
 
