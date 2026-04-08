@@ -63,6 +63,9 @@
 
     .asku-card-pad {
         @apply p-4 sm:p-6;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        min-width: 0;
     }
 
     .asku-card-topbar {
@@ -111,7 +114,10 @@
     }
 
     .asku-img-display {
-        @apply max-h-96 max-w-full rounded-xl border border-slate-200 object-contain cursor-zoom-in;
+        @apply max-h-96 max-w-full rounded-xl border border-slate-200 object-contain;
+        cursor: zoom-in;
+        display: block;
+        -webkit-tap-highlight-color: transparent;
     }
 
     .asku-input {

@@ -144,25 +144,29 @@ function go(path: string) {
 }
 
 .asku-menu {
-  position: absolute;
-  right: 0;
-  top: 52px;
-  width: 190px;
+  position: fixed;
+  right: 12px;
+  top: 62px;
+  width: 220px;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   padding: 8px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.12);
+  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+  z-index: 999;
 }
 
 .asku-menu-item {
   width: 100%;
   text-align: left;
-  padding: 10px 10px;
+  padding: 14px 12px;
   border-radius: 10px;
   border: 0;
   background: transparent;
   cursor: pointer;
+  font-size: 15px;
+  display: block;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .asku-menu-item:hover {

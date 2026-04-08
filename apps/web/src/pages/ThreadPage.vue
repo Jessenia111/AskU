@@ -340,7 +340,9 @@ onUnmounted(() => {
           </div>
 
           <div v-if="thread.imageUrl" class="mt-4">
-            <img :src="thread.imageUrl" alt="attached image" class="asku-img-display" @click="lightboxSrc = thread!.imageUrl" />
+            <button type="button" class="block p-0 border-0 bg-transparent" @click="lightboxSrc = thread!.imageUrl">
+              <img :src="thread.imageUrl" alt="attached image" class="asku-img-display" />
+            </button>
           </div>
 
           <div class="flex items-center justify-end gap-2 mt-6">
@@ -407,7 +409,9 @@ onUnmounted(() => {
                 </div>
 
                 <div v-if="c.imageUrl" class="mt-3">
-                  <img :src="c.imageUrl" alt="attached image" class="asku-img-display" @click="lightboxSrc = c.imageUrl" />
+                  <button type="button" class="block p-0 border-0 bg-transparent" @click="lightboxSrc = c.imageUrl">
+                    <img :src="c.imageUrl" alt="attached image" class="asku-img-display" />
+                  </button>
                 </div>
 
                 <div class="flex items-center justify-between mt-4">
