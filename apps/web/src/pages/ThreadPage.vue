@@ -46,7 +46,47 @@ const commentImageUrl = ref<string | null>(null);
 const posting = ref(false);
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-const lightboxSrc = ref<string | null>(null);
+// Gallery lightbox
+const lightboxIndex = ref<number | null>(null);
+
+const allImages = computed<string[]>(() => {
+  if (!thread.value) return [];
+  const imgs: string[] = [];
+  if (thread.value.imageUrl) imgs.push(thread.value.imageUrl);
+  for (const c of thread.value.comments) {
+    if (c.imageUrl) imgs.push(c.imageUrl);
+  }
+  return imgs;
+});
+
+const lightboxSrc = computed(() =>
+  lightboxIndex.value !== null ? allImages.value[lightboxIndex.value] ?? null : null
+);
+
+function openLightbox(src: string) {
+  const idx = allImages.value.indexOf(src);
+  lightboxIndex.value = idx >= 0 ? idx : 0;
+}
+
+function closeLightbox() { lightboxIndex.value = null; }
+
+function lightboxPrev() {
+  if (lightboxIndex.value === null) return;
+  lightboxIndex.value = (lightboxIndex.value - 1 + allImages.value.length) % allImages.value.length;
+}
+
+function lightboxNext() {
+  if (lightboxIndex.value === null) return;
+  lightboxIndex.value = (lightboxIndex.value + 1) % allImages.value.length;
+}
+
+// Swipe support
+let touchStartX = 0;
+function onTouchStart(e: TouchEvent) { touchStartX = e.touches[0].clientX; }
+function onTouchEnd(e: TouchEvent) {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dx) > 50) dx < 0 ? lightboxNext() : lightboxPrev();
+}
 
 const reportingKey = ref<string | null>(null);
 const reportedIds = ref<Set<string>>(new Set());
@@ -340,7 +380,7 @@ onUnmounted(() => {
           </div>
 
           <div v-if="thread.imageUrl" class="mt-4">
-            <button type="button" class="block p-0 border-0 bg-transparent" @click="lightboxSrc = thread!.imageUrl">
+            <button type="button" class="block p-0 border-0 bg-transparent" @click="openLightbox(thread!.imageUrl!)">
               <img :src="thread.imageUrl" alt="attached image" class="asku-img-display" />
             </button>
           </div>
@@ -409,7 +449,7 @@ onUnmounted(() => {
                 </div>
 
                 <div v-if="c.imageUrl" class="mt-3">
-                  <button type="button" class="block p-0 border-0 bg-transparent" @click="lightboxSrc = c.imageUrl">
+                  <button type="button" class="block p-0 border-0 bg-transparent" @click="openLightbox(c.imageUrl!)">
                     <img :src="c.imageUrl" alt="attached image" class="asku-img-display" />
                   </button>
                 </div>
@@ -484,28 +524,63 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <!-- Fullscreen image lightbox -->
+  <!-- Fullscreen gallery lightbox -->
   <Teleport to="body">
     <div
       v-if="lightboxSrc"
-      class="fixed inset-0 z-50 flex flex-col bg-black"
-      @click.self="lightboxSrc = null"
+      class="fixed inset-0 z-50 flex flex-col bg-black select-none"
+      @touchstart="onTouchStart"
+      @touchend="onTouchEnd"
     >
-      <div class="flex items-center p-4 shrink-0">
+      <!-- Top bar -->
+      <div class="flex items-center justify-between px-4 py-3 shrink-0">
         <button
-          class="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-white text-sm font-medium hover:bg-white/25 backdrop-blur"
-          @click="lightboxSrc = null"
+          class="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-white text-sm font-medium active:bg-white/30"
+          @click="closeLightbox"
         >
           ← Back
         </button>
+        <div v-if="allImages.length > 1" class="text-white/70 text-sm">
+          {{ (lightboxIndex ?? 0) + 1 }} / {{ allImages.length }}
+        </div>
+        <div class="w-20" />
       </div>
-      <div class="flex-1 flex items-center justify-center p-4 overflow-hidden">
+
+      <!-- Image -->
+      <div class="flex-1 flex items-center justify-center overflow-hidden px-2">
         <img
           :src="lightboxSrc"
+          :key="lightboxIndex"
           alt="full size"
-          class="max-h-full max-w-full object-contain rounded-xl select-none"
+          class="max-h-full max-w-full object-contain rounded-xl"
         />
       </div>
+
+      <!-- Prev / Next buttons -->
+      <div v-if="allImages.length > 1" class="flex justify-between px-4 py-4 shrink-0 gap-3">
+        <button
+          class="flex-1 rounded-xl bg-white/15 py-3 text-white text-sm font-medium active:bg-white/30"
+          @click="lightboxPrev"
+        >
+          ← Prev
+        </button>
+        <!-- Dot indicators -->
+        <div class="flex items-center gap-1.5">
+          <div
+            v-for="(_, i) in allImages"
+            :key="i"
+            class="rounded-full transition-all"
+            :class="i === lightboxIndex ? 'w-2.5 h-2.5 bg-white' : 'w-1.5 h-1.5 bg-white/40'"
+          />
+        </div>
+        <button
+          class="flex-1 rounded-xl bg-white/15 py-3 text-white text-sm font-medium active:bg-white/30"
+          @click="lightboxNext"
+        >
+          Next →
+        </button>
+      </div>
+      <div v-else class="pb-6" />
     </div>
   </Teleport>
 
