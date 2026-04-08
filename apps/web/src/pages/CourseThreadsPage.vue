@@ -58,8 +58,8 @@ const hasMore = computed(() => threads.value.length < total.value);
 
 function fmt(s: string) {
   return new Date(s).toLocaleString(undefined, {
-    dateStyle: "short",
-    timeStyle: "short",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
     timeZoneName: "short",
   });
 }
