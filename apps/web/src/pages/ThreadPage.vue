@@ -554,7 +554,7 @@ onUnmounted(() => {
       @touchend="onTouchEnd"
     >
       <!-- Top bar -->
-      <div class="flex items-center justify-between px-4 py-3 shrink-0" style="padding-top: max(12px, env(safe-area-inset-top))">
+      <div class="flex items-center justify-between px-4 shrink-0" style="padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: 12px;">
         <button
           class="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-white text-sm font-medium active:bg-white/30"
           @click="closeLightbox"
