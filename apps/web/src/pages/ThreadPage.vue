@@ -548,8 +548,8 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       v-if="lightboxSrc"
-      class="fixed inset-0 z-[999] flex flex-col bg-black select-none" style="padding-bottom: env(safe-area-inset-bottom)"
-      style="touch-action: none;"
+      class="fixed inset-0 z-[999] flex flex-col bg-black select-none"
+      style="touch-action: none; padding-bottom: env(safe-area-inset-bottom);"
       @touchstart="onTouchStart"
       @touchend="onTouchEnd"
     >
