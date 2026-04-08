@@ -57,7 +57,11 @@ const PAGE_SIZE = 20;
 const hasMore = computed(() => threads.value.length < total.value);
 
 function fmt(s: string) {
-  return new Date(s).toLocaleString();
+  return new Date(s).toLocaleString(undefined, {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZoneName: "short",
+  });
 }
 
 async function load() {
@@ -120,7 +124,9 @@ async function createThread() {
     imageUrl.value = null;
     showNew.value = false;
     toast.push("success", "Thread posted");
+    await new Promise((r) => setTimeout(r, 300));
     await load();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (e) {
     const msg = e instanceof ApiError ? e.message : String(e);
     // Fix #5: show form error without hiding the thread list

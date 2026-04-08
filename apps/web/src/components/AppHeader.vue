@@ -69,7 +69,8 @@ function go(path: string) {
   background: white;
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 200;
+  overflow: visible;
 }
 
 .asku-brand {
@@ -144,9 +145,9 @@ function go(path: string) {
 }
 
 .asku-menu {
-  position: fixed;
-  right: 12px;
-  top: 62px;
+  position: absolute;
+  right: 0;
+  top: 52px;
   width: 220px;
   background: white;
   border: 1px solid #e5e7eb;

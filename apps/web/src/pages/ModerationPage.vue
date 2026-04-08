@@ -24,7 +24,9 @@ type ReportItem = {
   contentAuthorName: string | null;
 };
 
-type Course = { id: string; code: string; title: string; semester: string; createdAt: string };
+type Course = { id: string; code: string; title: string; semester: string; createdAt: string; memberCount: number };
+type CourseMember = { userId: string; email: string; displayMode: string | null; pseudonym: string | null };
+type UserCourse = { courseId: string; code: string; title: string; semester: string; pseudonym: string | null };
 
 type UserItem = {
   id: string;
@@ -58,6 +60,16 @@ const showAddCourse = ref(false);
 const newCourse = ref({ code: "", title: "", semester: "" });
 const savingCourse = ref(false);
 const pendingDeleteCourse = ref<Course | null>(null);
+
+// Course members panel
+const expandedCourseId = ref<string | null>(null);
+const courseMembers = ref<CourseMember[]>([]);
+const loadingMembers = ref(false);
+
+// User courses panel
+const expandedUserId = ref<string | null>(null);
+const userCourses = ref<UserCourse[]>([]);
+const loadingUserCourses = ref(false);
 
 // Users
 const loadingUsers = ref(false);
@@ -312,6 +324,42 @@ function describeEntry(entry: AuditEntry): { label: string; detail: string; colo
   }
 }
 
+// ─── Course members ───────────────────────────────────────────────────────────
+
+async function toggleCourseMembers(courseId: string) {
+  if (expandedCourseId.value === courseId) {
+    expandedCourseId.value = null;
+    return;
+  }
+  expandedCourseId.value = courseId;
+  loadingMembers.value = true;
+  try {
+    courseMembers.value = await apiFetch<CourseMember[]>(`/api/v1/moderation/courses/${courseId}/members`);
+  } catch (e) {
+    toast.push("error", e instanceof ApiError ? e.message : "Failed to load members");
+  } finally {
+    loadingMembers.value = false;
+  }
+}
+
+// ─── User courses ─────────────────────────────────────────────────────────────
+
+async function toggleUserCourses(userId: string) {
+  if (expandedUserId.value === userId) {
+    expandedUserId.value = null;
+    return;
+  }
+  expandedUserId.value = userId;
+  loadingUserCourses.value = true;
+  try {
+    userCourses.value = await apiFetch<UserCourse[]>(`/api/v1/moderation/users/${userId}/courses`);
+  } catch (e) {
+    toast.push("error", e instanceof ApiError ? e.message : "Failed to load courses");
+  } finally {
+    loadingUserCourses.value = false;
+  }
+}
+
 // ─── Tab switching ────────────────────────────────────────────────────────────
 
 function switchTab(tab: Tab) {
@@ -529,18 +577,57 @@ onMounted(() => {
 
         <div v-if="!loadingCourses && courses.length > 0" class="flex flex-col gap-3">
           <UiCard v-for="c in courses" :key="c.id" :topbar="false">
-            <div class="asku-card-pad flex items-center justify-between gap-4">
-              <div>
-                <div class="font-bold text-blue-700">{{ c.code }}</div>
-                <div class="text-slate-700">{{ c.title }}</div>
-                <div class="text-xs text-slate-400 mt-0.5">{{ c.semester }} · Added {{ fmtDate(c.createdAt) }}</div>
+            <div class="asku-card-pad">
+              <div class="flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <div class="font-bold text-blue-700">{{ c.code }}</div>
+                  <div class="text-slate-700">{{ c.title }}</div>
+                  <div class="text-xs text-slate-400 mt-0.5">{{ c.semester }} · Added {{ fmtDate(c.createdAt) }}</div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    @click="toggleCourseMembers(c.id)"
+                  >
+                    <span class="font-bold text-blue-700">{{ c.memberCount }}</span>
+                    {{ c.memberCount === 1 ? 'member' : 'members' }}
+                    {{ expandedCourseId === c.id ? '▲' : '▼' }}
+                  </button>
+                  <button
+                    class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500"
+                    @click="pendingDeleteCourse = c"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <button
-                class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-500 shrink-0"
-                @click="pendingDeleteCourse = c"
-              >
-                Delete
-              </button>
+
+              <!-- Members list -->
+              <div v-if="expandedCourseId === c.id" class="mt-4 border-t border-slate-100 pt-4">
+                <div v-if="loadingMembers" class="text-sm text-slate-400">Loading members…</div>
+                <div v-else-if="courseMembers.length === 0" class="text-sm text-slate-400">No members yet.</div>
+                <div v-else class="flex flex-col gap-2">
+                  <div
+                    v-for="m in courseMembers"
+                    :key="m.userId"
+                    class="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-3 py-2"
+                  >
+                    <div class="min-w-0">
+                      <div class="text-xs font-mono text-slate-600 truncate">{{ m.email }}</div>
+                      <div class="text-xs text-slate-400 mt-0.5">
+                        {{ m.displayMode === 'REAL_NAME' ? 'Real name' : 'Anonymous' }}
+                      </div>
+                    </div>
+                    <span
+                      v-if="m.pseudonym"
+                      class="inline-flex items-center rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 shrink-0"
+                    >
+                      {{ m.pseudonym }}
+                    </span>
+                    <span v-else class="text-xs text-slate-400 shrink-0">no pseudonym yet</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </UiCard>
         </div>
@@ -565,41 +652,75 @@ onMounted(() => {
 
           <div class="flex flex-col gap-2">
             <UiCard v-for="u in filteredUsers" :key="u.id" :topbar="false">
-              <div class="asku-card-pad flex items-center justify-between gap-4">
-                <div class="min-w-0">
-                  <div class="font-mono text-sm text-slate-800 truncate">{{ u.email }}</div>
-                  <div class="flex items-center gap-2 mt-1 flex-wrap">
-                    <span
-                      v-if="u.isModerator"
-                      class="inline-flex items-center rounded-lg bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700"
+              <div class="asku-card-pad">
+                <div class="flex items-center justify-between gap-4">
+                  <div class="min-w-0">
+                    <div class="font-mono text-sm text-slate-800 truncate">{{ u.email }}</div>
+                    <div class="flex items-center gap-2 mt-1 flex-wrap">
+                      <span
+                        v-if="u.isModerator"
+                        class="inline-flex items-center rounded-lg bg-purple-100 px-2 py-0.5 text-xs font-semibold text-purple-700"
+                      >
+                        Moderator
+                      </span>
+                      <span class="text-xs text-slate-400">
+                        {{ u.displayMode === 'REAL_NAME' ? 'Real name' : 'Anonymous' }}
+                      </span>
+                      <span class="text-xs text-slate-400">Joined {{ fmtDate(u.createdAt) }}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    <button
+                      class="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                      @click="toggleUserCourses(u.id)"
                     >
-                      Moderator
-                    </span>
-                    <span class="text-xs text-slate-400">
-                      {{ u.displayMode === 'REAL_NAME' ? 'Real name' : 'Anonymous' }}
-                    </span>
-                    <span class="text-xs text-slate-400">Joined {{ fmtDate(u.createdAt) }}</span>
+                      Courses {{ expandedUserId === u.id ? '▲' : '▼' }}
+                    </button>
+                    <button
+                      class="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60"
+                      :class="u.isModerator
+                        ? 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+                      :disabled="actingUser === u.id"
+                      @click="toggleModerator(u)"
+                    >
+                      {{ u.isModerator ? 'Revoke mod' : 'Make mod' }}
+                    </button>
+                    <button
+                      v-if="u.id !== auth.user?.id"
+                      class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-red-500 disabled:opacity-60"
+                      :disabled="actingUser === u.id"
+                      @click="pendingDeleteUser = u"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <button
-                    class="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60"
-                    :class="u.isModerator
-                      ? 'border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
-                    :disabled="actingUser === u.id"
-                    @click="toggleModerator(u)"
-                  >
-                    {{ u.isModerator ? 'Revoke mod' : 'Make mod' }}
-                  </button>
-                  <button
-                    v-if="u.id !== auth.user?.id"
-                    class="inline-flex items-center rounded-lg bg-red-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-red-500 disabled:opacity-60"
-                    :disabled="actingUser === u.id"
-                    @click="pendingDeleteUser = u"
-                  >
-                    Delete
-                  </button>
+
+                <!-- User courses panel -->
+                <div v-if="expandedUserId === u.id" class="mt-4 border-t border-slate-100 pt-4">
+                  <div v-if="loadingUserCourses" class="text-sm text-slate-400">Loading…</div>
+                  <div v-else-if="userCourses.length === 0" class="text-sm text-slate-400">Not enrolled in any courses.</div>
+                  <div v-else class="flex flex-col gap-2">
+                    <div
+                      v-for="c in userCourses"
+                      :key="c.courseId"
+                      class="flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-3 py-2"
+                    >
+                      <div>
+                        <span class="text-xs font-bold text-blue-700">{{ c.code }}</span>
+                        <span class="text-xs text-slate-600 ml-1.5">{{ c.title }}</span>
+                        <div class="text-xs text-slate-400">{{ c.semester }}</div>
+                      </div>
+                      <span
+                        v-if="c.pseudonym"
+                        class="inline-flex items-center rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 shrink-0"
+                      >
+                        {{ c.pseudonym }}
+                      </span>
+                      <span v-else class="text-xs text-slate-400 shrink-0">no pseudonym</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </UiCard>

@@ -675,8 +675,30 @@ app.get("/api/v1/moderation/reports", requireAuth, requireModerator, asyncHandle
 
 // GET /api/v1/moderation/courses
 app.get("/api/v1/moderation/courses", requireAuth, requireModerator, asyncHandler(async (_req, res) => {
-  const courses = await prisma.course.findMany({ orderBy: { createdAt: "desc" } });
-  res.json(courses);
+  const courses = await prisma.course.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { _count: { select: { pseudonyms: { where: { isActive: true } } } } },
+  });
+  res.json(courses.map((c) => ({ ...c, memberCount: c._count.pseudonyms })));
+}));
+
+// GET /api/v1/moderation/courses/:courseId/members
+app.get("/api/v1/moderation/courses/:courseId/members", requireAuth, requireModerator, asyncHandler(async (req, res) => {
+  const { courseId } = req.params;
+  // Use Pseudonym as source of truth — enrollment records may not exist
+  const pseudonyms = await prisma.pseudonym.findMany({
+    where: { courseId, isActive: true },
+    include: {
+      user: { select: { id: true, email: true, displayMode: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(pseudonyms.map((p) => ({
+    userId: p.user.id,
+    email: p.user.email,
+    displayMode: p.user.displayMode,
+    pseudonym: p.publicName,
+  })));
 }));
 
 // POST /api/v1/moderation/courses — create a course
@@ -776,6 +798,26 @@ app.delete("/api/v1/moderation/users/:userId", requireAuth, requireModerator, as
   });
 
   res.status(204).send();
+}));
+
+// GET /api/v1/moderation/users/:userId/courses
+app.get("/api/v1/moderation/users/:userId/courses", requireAuth, requireModerator, asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  // Use active pseudonyms as source of truth — enrollment records may not exist
+  const pseudonyms = await prisma.pseudonym.findMany({
+    where: { userId, isActive: true },
+    include: {
+      course: { select: { id: true, code: true, title: true, semester: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(pseudonyms.map((p) => ({
+    courseId: p.course.id,
+    code: p.course.code,
+    title: p.course.title,
+    semester: p.course.semester,
+    pseudonym: p.publicName,
+  })));
 }));
 
 // POST /api/v1/moderation/users/:userId/grant-moderator

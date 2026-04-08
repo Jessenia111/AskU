@@ -82,10 +82,26 @@ function lightboxNext() {
 
 // Swipe support
 let touchStartX = 0;
-function onTouchStart(e: TouchEvent) { touchStartX = e.touches[0].clientX; }
+let touchStartY = 0;
+function onTouchStart(e: TouchEvent) {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}
 function onTouchEnd(e: TouchEvent) {
   const dx = e.changedTouches[0].clientX - touchStartX;
-  if (Math.abs(dx) > 50) dx < 0 ? lightboxNext() : lightboxPrev();
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  // only count as horizontal swipe (not a vertical scroll attempt)
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+    dx < 0 ? lightboxNext() : lightboxPrev();
+  }
+}
+
+// Click on left/right half of image area for navigation
+function onImageAreaClick(e: MouseEvent) {
+  if (allImages.value.length <= 1) return;
+  const target = e.currentTarget as HTMLElement;
+  const clickX = e.clientX - target.getBoundingClientRect().left;
+  clickX < target.offsetWidth / 2 ? lightboxPrev() : lightboxNext();
 }
 
 const reportingKey = ref<string | null>(null);
@@ -102,7 +118,11 @@ const auth = useAuthStore();
 const hasMod = computed(() => auth.isModerator);
 
 function fmt(s: string) {
-  return new Date(s).toLocaleString();
+  return new Date(s).toLocaleString(undefined, {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZoneName: "short",
+  });
 }
 
 async function load() {
@@ -529,6 +549,7 @@ onUnmounted(() => {
     <div
       v-if="lightboxSrc"
       class="fixed inset-0 z-50 flex flex-col bg-black select-none"
+      style="touch-action: none;"
       @touchstart="onTouchStart"
       @touchend="onTouchEnd"
     >
@@ -546,13 +567,17 @@ onUnmounted(() => {
         <div class="w-20" />
       </div>
 
-      <!-- Image -->
-      <div class="flex-1 flex items-center justify-center overflow-hidden px-2">
+      <!-- Image — click left half = prev, right half = next -->
+      <div
+        class="flex-1 flex items-center justify-center overflow-hidden px-2"
+        :class="allImages.length > 1 ? 'cursor-pointer' : ''"
+        @click="onImageAreaClick"
+      >
         <img
           :src="lightboxSrc"
           :key="lightboxIndex"
           alt="full size"
-          class="max-h-full max-w-full object-contain rounded-xl"
+          class="max-h-full max-w-full object-contain rounded-xl pointer-events-none"
         />
       </div>
 
@@ -607,6 +632,14 @@ onUnmounted(() => {
               <img :src="commentImageUrl" alt="preview" class="h-10 w-10 rounded-lg border border-slate-200 object-cover" />
               <button type="button" class="asku-img-remove" @click="commentImageUrl = null">✕</button>
             </div>
+            <!-- Hide keyboard button -->
+            <button
+              type="button"
+              class="ml-auto rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-500 active:bg-slate-100"
+              @click="commentTextarea?.blur()"
+            >
+              Hide keyboard
+            </button>
           </div>
         </div>
         <button
