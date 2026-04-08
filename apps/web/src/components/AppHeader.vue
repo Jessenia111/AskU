@@ -64,13 +64,19 @@ function go(path: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 6px 12px;
   border-bottom: 1px solid #e5e7eb;
   background: white;
   position: sticky;
   top: 0;
   z-index: 200;
   overflow: visible;
+}
+
+@media (min-width: 480px) {
+  .asku-header {
+    padding: 10px 20px;
+  }
 }
 
 .asku-brand {
@@ -81,25 +87,40 @@ function go(path: string) {
 }
 
 .asku-avatar {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   background: #2563eb;
   color: white;
   display: grid;
   place-items: center;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 12px;
   flex-shrink: 0;
+}
+
+@media (min-width: 480px) {
+  .asku-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 14px;
+  }
 }
 
 .asku-title {
   font-weight: 800;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.1;
 }
+
+@media (min-width: 480px) {
+  .asku-title {
+    font-size: 18px;
+  }
+}
+
 .asku-subtitle {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
   margin-top: 1px;
   display: none;
@@ -135,13 +156,22 @@ function go(path: string) {
 }
 
 .asku-menu-btn {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   border: 1px solid #e5e7eb;
   background: white;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 18px;
+}
+
+@media (min-width: 480px) {
+  .asku-menu-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 20px;
+  }
 }
 
 .asku-menu {

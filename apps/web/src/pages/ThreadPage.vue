@@ -548,13 +548,13 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       v-if="lightboxSrc"
-      class="fixed inset-0 z-[999] flex flex-col bg-black select-none"
+      class="fixed inset-0 z-[999] flex flex-col bg-black select-none" style="padding-bottom: env(safe-area-inset-bottom)"
       style="touch-action: none;"
       @touchstart="onTouchStart"
       @touchend="onTouchEnd"
     >
       <!-- Top bar -->
-      <div class="flex items-center justify-between px-4 py-3 shrink-0">
+      <div class="flex items-center justify-between px-4 py-3 shrink-0" style="padding-top: max(12px, env(safe-area-inset-top))">
         <button
           class="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-white text-sm font-medium active:bg-white/30"
           @click="closeLightbox"
