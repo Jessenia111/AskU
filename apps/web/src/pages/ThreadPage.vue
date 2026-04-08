@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { apiFetch, ApiError } from "../api/client";
 import UiCard from "../components/UiCard.vue";
@@ -16,11 +16,13 @@ type ThreadDto = {
   isMine: boolean;
   title: string;
   body: string;
+  imageUrl: string | null;
   status: string;
   createdAt: string;
   comments: Array<{
     id: string;
     body: string;
+    imageUrl: string | null;
     createdAt: string;
     author: { pseudonymId: string; publicName: string };
     isMine: boolean;
@@ -40,7 +42,9 @@ const error = ref<string | null>(null);
 const thread = ref<ThreadDto | null>(null);
 
 const commentBody = ref("");
+const commentImageUrl = ref<string | null>(null);
 const posting = ref(false);
+let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 const reportingKey = ref<string | null>(null);
 const reportedIds = ref<Set<string>>(new Set());
@@ -72,6 +76,29 @@ async function load() {
   }
 }
 
+async function silentPoll() {
+  if (posting.value || !thread.value) return;
+  try {
+    const fresh = await apiFetch<ThreadDto>(`/api/v1/threads/${threadId.value}`);
+    if (thread.value && fresh.comments.length !== thread.value.comments.length) {
+      thread.value.comments = fresh.comments;
+    }
+  } catch { /* ignore poll errors */ }
+}
+
+function handleCommentImagePick(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) {
+    toast.push("error", "Image must be under 3 MB");
+    (e.target as HTMLInputElement).value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => { commentImageUrl.value = reader.result as string; };
+  reader.readAsDataURL(file);
+}
+
 async function postComment() {
   if (!thread.value) return;
   const body = commentBody.value.trim();
@@ -81,9 +108,10 @@ async function postComment() {
   try {
     await apiFetch(`/api/v1/threads/${thread.value.id}/comments`, {
       method: "POST",
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, imageUrl: commentImageUrl.value }),
     });
     commentBody.value = "";
+    commentImageUrl.value = null;
     toast.push("success", "Comment posted");
     await load();
     window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }), 50);
@@ -250,7 +278,14 @@ const backTo = computed(() => {
   return "/courses";
 });
 
-onMounted(load);
+onMounted(() => {
+  load();
+  pollInterval = setInterval(silentPoll, 5000);
+});
+
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval);
+});
 </script>
 
 <template>
@@ -285,11 +320,11 @@ onMounted(load);
     <div v-if="loading" class="asku-muted mt-4">Loading…</div>
     <div v-if="error" class="asku-error mt-4">{{ error }}</div>
 
-    <div v-if="thread" class="flex flex-col gap-6 mt-4">
+    <div v-if="thread" class="flex flex-col gap-6 mt-4 pb-56">
       <UiCard>
         <div class="asku-card-pad">
-          <div class="flex items-start justify-between gap-6">
-            <div class="text-3xl font-semibold">{{ thread.title }}</div>
+          <div class="flex flex-wrap items-start justify-between gap-2 sm:gap-6">
+            <div class="text-xl sm:text-3xl font-semibold flex-1 min-w-0">{{ thread.title }}</div>
             <div class="asku-date">{{ fmt(thread.createdAt) }}</div>
           </div>
 
@@ -300,6 +335,10 @@ onMounted(load);
 
           <div class="asku-body mt-4">
             {{ thread.body }}
+          </div>
+
+          <div v-if="thread.imageUrl" class="mt-4">
+            <img :src="thread.imageUrl" alt="attached image" class="asku-img-display" />
           </div>
 
           <div class="flex items-center justify-end gap-2 mt-6">
@@ -354,8 +393,8 @@ onMounted(load);
           <div v-else class="flex flex-col gap-4">
             <UiCard v-for="c in thread.comments" :key="c.id">
               <div class="asku-card-pad">
-                <div class="flex items-start justify-between gap-6">
-                  <div class="asku-meta">
+                <div class="flex flex-wrap items-start justify-between gap-1 sm:gap-6">
+                  <div class="asku-meta !mt-0">
                     <PseudonymBadge :pseudonym-id="c.author.pseudonymId" :public-name="c.author.publicName" />
                   </div>
                   <div class="asku-date">{{ fmt(c.createdAt) }}</div>
@@ -363,6 +402,10 @@ onMounted(load);
 
                 <div class="asku-body mt-2">
                   {{ c.body }}
+                </div>
+
+                <div v-if="c.imageUrl" class="mt-3">
+                  <img :src="c.imageUrl" alt="attached image" class="asku-img-display" />
                 </div>
 
                 <div class="flex items-center justify-between mt-4">
@@ -432,29 +475,42 @@ onMounted(load);
         </div>
       </UiCard>
 
-      <UiCard :topbar="false">
-        <div class="asku-card-pad">
-          <div class="text-xl font-semibold mb-3">Write a comment</div>
+    </div>
+  </div>
 
+  <!-- Fixed comment bar — always visible at the bottom of the screen -->
+  <div v-if="thread" class="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+    <div class="max-w-5xl mx-auto px-4 py-3 sm:px-6">
+      <div class="flex items-end gap-3">
+        <div class="flex-1 flex flex-col gap-2">
           <textarea
             ref="commentTextarea"
             v-model="commentBody"
-            class="asku-textarea"
-            rows="4"
-            placeholder="Write a comment… (use ↩ Reply to @mention someone)"
+            class="asku-textarea !py-2 resize-none"
+            rows="2"
+            placeholder="Write a comment…"
+            @focus="($el as HTMLTextAreaElement).rows = 4"
+            @blur="!commentBody && (($el as HTMLTextAreaElement).rows = 2)"
           />
-
-          <div class="flex justify-end mt-3">
-            <button
-              class="asku-btn"
-              :disabled="posting || !commentBody.trim()"
-              @click="postComment"
-            >
-              {{ posting ? "Posting..." : "Post comment" }}
-            </button>
+          <div class="flex items-center gap-3">
+            <label class="asku-img-upload-label !py-1 !px-3 text-xs">
+              {{ commentImageUrl ? 'Change photo' : 'Add photo' }}
+              <input type="file" accept="image/*" class="sr-only" @change="handleCommentImagePick" />
+            </label>
+            <div v-if="commentImageUrl" class="relative inline-block">
+              <img :src="commentImageUrl" alt="preview" class="h-10 w-10 rounded-lg border border-slate-200 object-cover" />
+              <button type="button" class="asku-img-remove" @click="commentImageUrl = null">✕</button>
+            </div>
           </div>
         </div>
-      </UiCard>
+        <button
+          class="asku-btn self-end"
+          :disabled="posting || !commentBody.trim()"
+          @click="postComment"
+        >
+          {{ posting ? "Posting..." : "Post" }}
+        </button>
+      </div>
     </div>
   </div>
 </template>

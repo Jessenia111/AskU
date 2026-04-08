@@ -97,6 +97,7 @@ model Thread {
   authorPseudonymId String
   title             String
   body              String
+  imageUrl          String?
   status            String   @default("OPEN")
   isHidden          Boolean  @default(false)
   createdAt         DateTime @default(now())
@@ -112,6 +113,7 @@ model Comment {
   threadId          String
   authorPseudonymId String
   body              String
+  imageUrl          String?
   isHidden          Boolean  @default(false)
   createdAt         DateTime @default(now())
 

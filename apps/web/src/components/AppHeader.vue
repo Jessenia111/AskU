@@ -64,7 +64,7 @@ function go(path: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
+  padding: 10px 16px;
   border-bottom: 1px solid #e5e7eb;
   background: white;
   position: sticky;
@@ -80,14 +80,16 @@ function go(path: string) {
 }
 
 .asku-avatar {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
   background: #2563eb;
   color: white;
   display: grid;
   place-items: center;
   font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .asku-title {
@@ -96,9 +98,16 @@ function go(path: string) {
   line-height: 1.1;
 }
 .asku-subtitle {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
-  margin-top: 2px;
+  margin-top: 1px;
+  display: none;
+}
+
+@media (min-width: 360px) {
+  .asku-subtitle {
+    display: block;
+  }
 }
 
 .asku-header-right {
@@ -111,10 +120,17 @@ function go(path: string) {
 .asku-me {
   font-size: 12px;
   color: #64748b;
-  max-width: 280px;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: none;
+}
+
+@media (min-width: 480px) {
+  .asku-me {
+    display: block;
+  }
 }
 
 .asku-menu-btn {

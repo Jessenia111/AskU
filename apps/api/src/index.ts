@@ -40,7 +40,7 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || "http://localhost:5173",
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 app.use(cookieParser());
 app.use(attachAuth);
 if (process.env.DEV_AUTH === "true") {
@@ -375,6 +375,7 @@ app.get("/api/v1/threads/:threadId", asyncHandler(async (req, res) => {
     isMine: threadIsMine,
     title: thread.title,
     body: thread.body,
+    imageUrl: thread.imageUrl ?? null,
     status: thread.status,
     createdAt: thread.createdAt,
     comments: thread.comments.map((c) => {
@@ -383,6 +384,7 @@ app.get("/api/v1/threads/:threadId", asyncHandler(async (req, res) => {
       return {
         id: c.id,
         body: c.body,
+        imageUrl: c.imageUrl ?? null,
         createdAt: c.createdAt,
         author: { pseudonymId: c.authorPseudonymId, publicName: c.author.publicName },
         isMine: myUserId ? c.author.userId === myUserId : false,
@@ -404,6 +406,7 @@ app.post(
     const bodySchema = z.object({
       title: z.string().min(3).max(200),
       body: z.string().min(1).max(5000),
+      imageUrl: z.string().max(5 * 1024 * 1024).optional().nullable(),
     });
 
     const parsed = bodySchema.safeParse(req.body);
@@ -417,6 +420,7 @@ app.post(
         authorPseudonymId: req.pseudonym.id,
         title: parsed.data.title,
         body: parsed.data.body,
+        imageUrl: parsed.data.imageUrl ?? null,
       },
     });
 
@@ -432,6 +436,7 @@ app.post("/api/v1/threads/:threadId/comments",
 
   const bodySchema = z.object({
     body: z.string().min(1).max(5000),
+    imageUrl: z.string().max(5 * 1024 * 1024).optional().nullable(),
   });
 
   const parsed = bodySchema.safeParse(req.body);
@@ -453,6 +458,7 @@ app.post("/api/v1/threads/:threadId/comments",
       threadId,
       authorPseudonymId: pseudonym.id,
       body: parsed.data.body,
+      imageUrl: parsed.data.imageUrl ?? null,
     },
   });
 

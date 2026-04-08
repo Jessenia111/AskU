@@ -34,15 +34,15 @@
     }
 
     .asku-main {
-        @apply max-w-5xl mx-auto px-6 py-10;
+        @apply max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-10;
     }
 
     .asku-page-title {
-        @apply text-5xl font-semibold tracking-tight mb-8;
+        @apply text-3xl sm:text-5xl font-semibold tracking-tight mb-6 sm:mb-8;
     }
 
     .asku-subheader {
-        @apply flex items-center gap-4 mb-6;
+        @apply flex flex-wrap items-center gap-3 mb-5 sm:gap-4 sm:mb-6;
     }
 
     .asku-back {
@@ -50,7 +50,7 @@
     }
 
     .asku-section-title {
-        @apply text-4xl font-semibold tracking-tight;
+        @apply text-2xl sm:text-4xl font-semibold tracking-tight;
     }
 
     .asku-link-action {
@@ -62,7 +62,7 @@
     }
 
     .asku-card-pad {
-        @apply p-6;
+        @apply p-4 sm:p-6;
     }
 
     .asku-card-topbar {
@@ -81,19 +81,35 @@
     }
 
     .asku-thread-title {
-        @apply text-2xl font-semibold text-slate-900;
+        @apply text-xl sm:text-2xl font-semibold text-slate-900;
     }
 
     .asku-meta {
-        @apply text-slate-500 text-base mt-2;
+        @apply text-slate-500 text-sm sm:text-base mt-2;
     }
 
     .asku-body {
-        @apply text-slate-700 text-lg mt-4;
+        @apply text-slate-700 text-base sm:text-lg mt-3 sm:mt-4;
     }
 
     .asku-date {
-        @apply text-slate-500 text-base;
+        @apply text-slate-500 text-sm sm:text-base whitespace-nowrap;
+    }
+
+    .asku-img-upload-label {
+        @apply inline-flex items-center gap-2 cursor-pointer rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:border-slate-400 transition-colors;
+    }
+
+    .asku-img-preview {
+        @apply max-h-48 max-w-full rounded-xl border border-slate-200 object-contain;
+    }
+
+    .asku-img-remove {
+        @apply absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center hover:bg-red-600 leading-none;
+    }
+
+    .asku-img-display {
+        @apply max-h-96 max-w-full rounded-xl border border-slate-200 object-contain cursor-zoom-in;
     }
 
     .asku-input {

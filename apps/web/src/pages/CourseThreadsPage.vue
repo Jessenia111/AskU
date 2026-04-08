@@ -38,6 +38,7 @@ const courseName = ref<string | null>(null);
 const showNew = ref(false);
 const title = ref("");
 const body = ref("");
+const imageUrl = ref<string | null>(null);
 const submitting = ref(false);
 
 // Fix #4: title validation message
@@ -93,16 +94,30 @@ async function loadMore() {
   }
 }
 
+function handleImagePick(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) {
+    toast.push("error", "Image must be under 3 MB");
+    (e.target as HTMLInputElement).value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => { imageUrl.value = reader.result as string; };
+  reader.readAsDataURL(file);
+}
+
 async function createThread() {
   submitting.value = true;
   createError.value = null;
   try {
     await apiFetch(`/api/v1/courses/${courseId.value}/threads`, {
       method: "POST",
-      body: JSON.stringify({ title: title.value, body: body.value }),
+      body: JSON.stringify({ title: title.value, body: body.value, imageUrl: imageUrl.value }),
     });
     title.value = "";
     body.value = "";
+    imageUrl.value = null;
     showNew.value = false;
     toast.push("success", "Thread posted");
     await load();
@@ -151,8 +166,8 @@ onMounted(load);
         <div class="asku-section-title">Threads</div>
         <div v-if="courseName" class="text-sm text-slate-500 -mt-1">{{ courseName }}</div>
       </div>
-      <div v-if="myPseudonym" class="ml-auto flex items-center gap-2 text-sm text-slate-500">
-        You are
+      <div v-if="myPseudonym" class="ml-auto flex flex-wrap items-center gap-2 text-sm text-slate-500">
+        <span class="hidden sm:inline">You are</span>
         <span class="rounded-lg bg-blue-50 px-2.5 py-1 text-sm font-semibold text-blue-700">
           {{ myPseudonym }}
         </span>
@@ -180,6 +195,18 @@ onMounted(load);
             <p v-if="titleError" class="mt-1 text-xs text-red-500">{{ titleError }}</p>
           </div>
           <textarea v-model="body" class="asku-textarea" rows="5" placeholder="Body" />
+
+          <!-- Image upload -->
+          <div>
+            <label class="asku-img-upload-label">
+              {{ imageUrl ? 'Change photo' : 'Add photo' }}
+              <input type="file" accept="image/*" class="sr-only" @change="handleImagePick" />
+            </label>
+            <div v-if="imageUrl" class="mt-2 relative inline-block">
+              <img :src="imageUrl" alt="preview" class="asku-img-preview" />
+              <button type="button" class="asku-img-remove" @click="imageUrl = null">✕</button>
+            </div>
+          </div>
 
           <!-- Fix #5: form error shown inside form, not over thread list -->
           <div v-if="createError" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -216,8 +243,8 @@ onMounted(load);
 
       <UiCard v-for="t in threads" :key="t.id">
         <div class="asku-card-pad">
-          <div class="flex items-start justify-between gap-6">
-            <router-link class="asku-thread-title" :to="`/threads/${t.id}`">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <router-link class="asku-thread-title flex-1 min-w-0" :to="`/threads/${t.id}`">
               {{ t.title }}
             </router-link>
             <div class="asku-date">{{ fmt(t.createdAt) }}</div>
