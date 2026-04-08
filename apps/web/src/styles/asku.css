@@ -89,7 +89,9 @@
     }
 
     .asku-body {
-        @apply text-slate-700 text-base sm:text-lg mt-3 sm:mt-4;
+        @apply text-slate-700 text-base sm:text-lg mt-3 sm:mt-4 break-words;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     .asku-date {

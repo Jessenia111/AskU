@@ -46,6 +46,8 @@ const commentImageUrl = ref<string | null>(null);
 const posting = ref(false);
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 
+const lightboxSrc = ref<string | null>(null);
+
 const reportingKey = ref<string | null>(null);
 const reportedIds = ref<Set<string>>(new Set());
 
@@ -338,7 +340,7 @@ onUnmounted(() => {
           </div>
 
           <div v-if="thread.imageUrl" class="mt-4">
-            <img :src="thread.imageUrl" alt="attached image" class="asku-img-display" />
+            <img :src="thread.imageUrl" alt="attached image" class="asku-img-display" @click="lightboxSrc = thread!.imageUrl" />
           </div>
 
           <div class="flex items-center justify-end gap-2 mt-6">
@@ -405,7 +407,7 @@ onUnmounted(() => {
                 </div>
 
                 <div v-if="c.imageUrl" class="mt-3">
-                  <img :src="c.imageUrl" alt="attached image" class="asku-img-display" />
+                  <img :src="c.imageUrl" alt="attached image" class="asku-img-display" @click="lightboxSrc = c.imageUrl" />
                 </div>
 
                 <div class="flex items-center justify-between mt-4">
@@ -477,6 +479,31 @@ onUnmounted(() => {
 
     </div>
   </div>
+
+  <!-- Fullscreen image lightbox -->
+  <Teleport to="body">
+    <div
+      v-if="lightboxSrc"
+      class="fixed inset-0 z-50 flex flex-col bg-black"
+      @click.self="lightboxSrc = null"
+    >
+      <div class="flex items-center p-4 shrink-0">
+        <button
+          class="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2 text-white text-sm font-medium hover:bg-white/25 backdrop-blur"
+          @click="lightboxSrc = null"
+        >
+          ← Back
+        </button>
+      </div>
+      <div class="flex-1 flex items-center justify-center p-4 overflow-hidden">
+        <img
+          :src="lightboxSrc"
+          alt="full size"
+          class="max-h-full max-w-full object-contain rounded-xl select-none"
+        />
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Fixed comment bar — always visible at the bottom of the screen -->
   <div v-if="thread" class="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
