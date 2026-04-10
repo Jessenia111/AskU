@@ -1,31 +1,37 @@
 import "dotenv/config";
-import nodemailer from "nodemailer";
 
 function getEnv(name: string) {
   return (process.env[name] ?? "").trim();
 }
 
 export function smtpConfigured() {
-  return !!getEnv("SMTP_USER") && !!getEnv("SMTP_PASS");
+  return !!getEnv("SENDGRID_API_KEY");
 }
 
 export async function sendVerificationCodeEmail(to: string, code: string) {
+  const apiKey = getEnv("SENDGRID_API_KEY");
   const appName = getEnv("APP_NAME") || "AskU";
-  const user  = getEnv("SMTP_USER");
-  const pass  = getEnv("SMTP_PASS");
-  const from  = getEnv("SMTP_FROM") || user;
+  const from = getEnv("SMTP_FROM") || getEnv("SMTP_USER");
 
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user, pass },
-  });
-
-  await transporter.sendMail({
-    from: `"${appName}" <${from}>`,
-    to,
-    subject: `Your ${appName} login code`,
-    text: `Hello,\n\nYour ${appName} login code is: ${code}\n\nThis code expires in 10 minutes.\nIf you did not request this, you can safely ignore this email.\n\n— ${appName} Team`,
-    html: `<!DOCTYPE html>
+  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: from, name: appName },
+      reply_to: { email: from, name: appName },
+      subject: `Your ${appName} login code`,
+      content: [
+        {
+          type: "text/plain",
+          value: `Hello,\n\nYour ${appName} login code is: ${code}\n\nThis code expires in 10 minutes.\nIf you did not request this, you can safely ignore this email.\n\n— ${appName} Team`,
+        },
+        {
+          type: "text/html",
+          value: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:ui-sans-serif,system-ui,sans-serif">
@@ -45,5 +51,13 @@ export async function sendVerificationCodeEmail(to: string, code: string) {
   </table>
 </body>
 </html>`,
+        },
+      ],
+    }),
   });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`SendGrid error ${response.status}: ${body}`);
+  }
 }
