@@ -4,9 +4,11 @@ export const SESSION_COOKIE = "asku_session";
 
 export function isUtEmail(email: string) {
   const domain = (process.env.ALLOWED_EMAIL_DOMAIN ?? "ut.ee").trim().toLowerCase();
-  // If domain is empty — allow all emails
-  if (!domain) return email.includes("@") && email.length > 3;
-  return email.toLowerCase().endsWith(`@${domain}`);
+  const parts = email.toLowerCase().trim().split("@");
+  // Must have exactly one @, non-empty local part
+  if (parts.length !== 2 || parts[0].length === 0) return false;
+  if (!domain) return true;
+  return parts[1] === domain;
 }
 
 export function generateCode6() {

@@ -100,9 +100,10 @@ onMounted(() => {
 const DOMAIN = (import.meta.env.VITE_ALLOWED_EMAIL_DOMAIN as string || "").trim().toLowerCase();
 
 function isAllowedEmail(value: string) {
-  const v = value.trim().toLowerCase();
-  if (!DOMAIN) return v.includes("@") && v.length > 3;
-  return v.endsWith(`@${DOMAIN}`) && v.length > `@${DOMAIN}`.length;
+  const parts = value.trim().toLowerCase().split("@");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+  if (!DOMAIN) return true;
+  return parts[1] === DOMAIN;
 }
 
 const domainHint = DOMAIN ? `@${DOMAIN}` : "any email";

@@ -247,12 +247,18 @@ onMounted(load);
         <button class="asku-btn mt-2" @click="showNew = true">Post the first thread</button>
       </div>
 
-      <UiCard v-for="t in threads" :key="t.id">
+      <div
+        v-for="t in threads"
+        :key="t.id"
+        class="asku-card group cursor-pointer transition-all duration-150 hover:border-blue-300 hover:shadow-md active:scale-[0.99]"
+        @click="$router.push(`/threads/${t.id}`)"
+      >
+        <div class="asku-card-topbar" />
         <div class="asku-card-pad">
           <div class="flex flex-wrap items-start justify-between gap-2">
-            <router-link class="asku-thread-title flex-1 min-w-0" :to="`/threads/${t.id}`">
+            <div class="asku-thread-title flex-1 min-w-0 group-hover:text-blue-700 transition-colors">
               {{ t.title }}
-            </router-link>
+            </div>
             <div class="asku-date">{{ fmt(t.createdAt) }}</div>
           </div>
 
@@ -261,20 +267,24 @@ onMounted(load);
             · {{ t.status }}
           </div>
 
-          <div class="asku-body">
+          <div class="asku-body line-clamp-3">
             {{ t.bodyPreview }}
           </div>
 
-          <div class="flex justify-end mt-6">
-            <!-- Fix #6: disabled after reported -->
-            <ReportMenu
-              :disabled="reportingKey === t.id || reportedIds.has(t.id)"
-              :reported="reportedIds.has(t.id)"
-              @select="(reason) => submitReport(t.id, reason)"
-            />
+          <div class="flex items-center justify-between mt-4">
+            <span class="text-sm font-medium text-blue-600 group-hover:text-blue-700 flex items-center gap-1">
+              Open discussion <span class="transition-transform group-hover:translate-x-1 inline-block">→</span>
+            </span>
+            <div @click.stop>
+              <ReportMenu
+                :disabled="reportingKey === t.id || reportedIds.has(t.id)"
+                :reported="reportedIds.has(t.id)"
+                @select="(reason) => submitReport(t.id, reason)"
+              />
+            </div>
           </div>
         </div>
-      </UiCard>
+      </div>
 
       <!-- Load more -->
       <div v-if="hasMore" class="flex justify-center pb-4">
