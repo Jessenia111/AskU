@@ -9,7 +9,7 @@ import { ContentType, ReportStatus, ModActionType } from "@prisma/client";
 import { rateLimit, newAccountRateLimit } from "./rateLimit";
 import cookieParser from "cookie-parser";
 import { attachAuth, requireAuth } from "./authMiddleware";
-import { generateCode6, isUtEmail, randomToken, SESSION_COOKIE, sha256 } from "./auth";
+import { generateCode6, isUtEmail, randomToken, SESSION_COOKIE, SESSION_INACTIVITY_MS, sha256 } from "./auth";
 import { sendVerificationCodeEmail, smtpConfigured } from "./mailer";
 import { getOrRotatePseudonym, updateAllPseudonymsForUser, regeneratePseudonym, findActivePseudonym } from "./pseudonym";
 
@@ -181,7 +181,7 @@ app.post(
     data: {
       userId: user.id,
       tokenHash,
-      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+      expiresAt: new Date(Date.now() + SESSION_INACTIVITY_MS),
     },
   });
 
@@ -193,7 +193,7 @@ app.post(
     httpOnly: true,
     sameSite: isProduction ? "none" : "lax",
     secure: isProduction,
-    maxAge: 14 * 24 * 60 * 60 * 1000,
+    maxAge: SESSION_INACTIVITY_MS,
   });
 
   res.json({ ok: true });
@@ -840,6 +840,16 @@ app.post("/api/v1/moderation/users/:userId/grant-moderator", requireAuth, requir
     create: { userId, roleId: modRole.id },
   });
 
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: req.user!.id,
+      eventType: "GRANT_MODERATOR",
+      entityType: "USER",
+      entityId: userId,
+      metadataJson: { email: user.email },
+    },
+  });
+
   res.json({ ok: true });
 }));
 
@@ -851,6 +861,16 @@ app.delete("/api/v1/moderation/users/:userId/revoke-moderator", requireAuth, req
 
   await prisma.userRole.deleteMany({
     where: { userId, roleId: modRole.id },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: req.user!.id,
+      eventType: "REVOKE_MODERATOR",
+      entityType: "USER",
+      entityId: userId,
+      metadataJson: {},
+    },
   });
 
   res.json({ ok: true });
@@ -954,6 +974,17 @@ app.get("/api/v1/pseudonyms/:pseudonymId/identity", requireAuth, requireModerato
     include: { user: { select: { email: true } } },
   });
   if (!pseudonym) return res.status(404).json({ error: "Pseudonym not found" });
+
+  await prisma.auditLog.create({
+    data: {
+      actorUserId: req.user!.id,
+      eventType: "IDENTITY_LOOKUP",
+      entityType: "USER",
+      entityId: pseudonymId,
+      metadataJson: { publicName: pseudonym.publicName, email: pseudonym.user.email },
+    },
+  });
+
   res.json({ pseudonymId, publicName: pseudonym.publicName, email: pseudonym.user.email });
 }));
 

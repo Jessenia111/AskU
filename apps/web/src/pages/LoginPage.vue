@@ -2,6 +2,14 @@
   <div class="min-h-screen flex items-center justify-center px-4">
     <div class="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
 
+      <div
+        v-if="loggedOutForInactivity"
+        class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+      >
+        You were signed out automatically after one hour of inactivity.
+        Please log in again to continue.
+      </div>
+
       <!-- Quick login banner when saved email exists -->
       <div
         v-if="savedEmail && !showFullForm"
@@ -76,10 +84,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { apiFetch } from "../api/client";
 
 const router = useRouter();
+const route = useRoute();
+const loggedOutForInactivity = computed(() => route.query.reason === "inactivity");
 
 const email = ref("");
 const savedEmail = ref<string | null>(null);
