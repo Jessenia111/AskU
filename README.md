@@ -1,8 +1,14 @@
 # AskU
 
-AskU is a small web platform I built as part of my Bachelor's thesis at the University of Tartu. The idea behind it is simple: many students stay quiet in class because they're afraid their question will sound stupid. AskU lets them ask anything anonymously, but only if they have a real `@ut.ee` email — so the platform stays trusted, and trolling has nowhere to hide.
+AskU is a small web platform I built as part of my Bachelor's thesis at the University of Tartu. The idea behind it is simple: many students stay quiet in class because they're afraid their question will sound stupid. AskU lets them ask anything anonymously, but only if they have a real `@ut.ee` email - so the platform stays trusted, and trolling has nowhere to hide.
 
 Inside a course, you appear as something like `SwiftOwl247` instead of your real name. Your pseudonym changes every 24 hours, and you get a different one in every course, so no one can quietly track you across classes. Moderators can still find out who you are if you break the rules, but every time they do, it's written down in an audit log that they can't edit.
+
+## Demo
+
+A short walkthrough of AskU's main features — login with `@ut.ee`, course-scoped pseudonym, anonymous posting, switching to identified mode, reporting, and the moderator panel with audit log:
+
+https://github.com/Jessenia111/AskU/raw/main/docs/demo.mp4
 
 ## Try it
 
