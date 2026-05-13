@@ -13,9 +13,6 @@ import { generateCode6, isUtEmail, randomToken, SESSION_COOKIE, SESSION_INACTIVI
 import { sendVerificationCodeEmail, smtpConfigured } from "./mailer";
 import { getOrRotatePseudonym, updateAllPseudonymsForUser, regeneratePseudonym, findActivePseudonym } from "./pseudonym";
 
-
-
-
 dotenv.config({ override: true });
 
 /** Wraps an async route handler so unhandled rejections reach Express's error middleware. */
@@ -52,8 +49,6 @@ if (process.env.DEV_AUTH === "true") {
   app.use(devAuth);
 }
 
-
-
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok" });
 });
@@ -62,7 +57,8 @@ app.get("/health", (_req: Request, res: Response) => {
 app.post(
   "/api/v1/auth/request",
   rateLimit("auth_request", 60 * 60 * 1000, 10, true),
-  asyncHandler(async (req, res) => {  const schema = z.object({ email: z.string().email() });
+  asyncHandler(async (req, res) => {
+  const schema = z.object({ email: z.string().email() });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Invalid body" });
 
@@ -87,27 +83,24 @@ app.post(
     },
   });
 
+  const isProduction = process.env.NODE_ENV === "production";
+
   if (smtpConfigured()) {
     try {
       await sendVerificationCodeEmail(email, code);
     } catch (err) {
       console.error("[AUTH] Failed to send verification email:", err);
-      // In dev: still print code so testing can continue even if email fails
-      if (process.env.NODE_ENV !== "production") {
-        console.log(`[AUTH DEV] Email failed but code for ${email}: ${code}`);
-      } else {
+      if (isProduction) {
         return res.status(500).json({ error: "Failed to send verification email. Please try again." });
       }
     }
-  } else if (process.env.NODE_ENV !== "production") {
-    console.log(`[AUTH DEV] Code for ${email}: ${code}`);
-  } else {
+  } else if (isProduction) {
     console.error("[AUTH] SMTP is not configured in production!");
     return res.status(500).json({ error: "Email service is not configured." });
   }
 
-  // Always log code in dev for easy testing with multiple users
-  if (process.env.NODE_ENV !== "production") {
+  // In dev, always print the code so testing works even without SMTP
+  if (!isProduction) {
     console.log(`[AUTH DEV] ✉️  ${email} → code: ${code}`);
   }
 
@@ -1107,7 +1100,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 const port = Number(process.env.PORT ?? 8000);
 // Use 0.0.0.0 to be reachable from LAN / other devices (needed for local testing with peers)
-const host = process.env.API_HOST ?? (process.env.NODE_ENV === "production" ? "0.0.0.0" : "0.0.0.0");
+const host = process.env.API_HOST ?? "0.0.0.0";
 app.listen(port, host, () => {
   console.log(`API running on http://${host}:${port}`);
 });
